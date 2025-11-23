@@ -191,10 +191,21 @@ export class QuizManager {
   }
 
   private revealAnswer() {
-    this.stopTimer();
     const state = this.getGameState();
+    if (state.quiz.phase === 'REVEAL') return;
+    
+    this.stopTimer();
     state.quiz.phase = 'REVEAL';
     
+    // Ensure all answers are locked before calculating scores
+    // This handles the case where host reveals before auto-lock triggers
+    state.teams.forEach(team => {
+      const answer = state.quiz.answers[team.id];
+      if (answer) {
+        answer.locked = true;
+      }
+    });
+
     // Calculate scores
     const correctIndex = state.quiz.currentQuestion?.correctOptionIndex;
     if (correctIndex !== undefined) {
@@ -222,6 +233,17 @@ export class QuizManager {
   private cancelQuiz() {
     this.stopTimer();
     const state = this.getGameState();
+    
+    // Record history if scores > 0
+    if (state.teams.some(t => t.score > 0)) {
+      state.history.push({
+        id: Date.now().toString(),
+        gameType: 'Life Quiz',
+        timestamp: Date.now(),
+        scores: state.teams.map(t => ({ teamId: t.id, teamName: t.name, score: t.score }))
+      });
+    }
+
     state.phase = 'LOBBY';
     state.activeRound = null;
     state.quiz.isActive = false;

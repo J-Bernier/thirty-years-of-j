@@ -21,6 +21,8 @@ let gameState: GameState = {
   phase: 'LOBBY',
   teams: [],
   activeRound: null,
+  history: [],
+  showLeaderboard: false,
   quiz: {
     isActive: false,
     config: { timePerQuestion: 30, totalQuestions: 0 },
@@ -66,6 +68,27 @@ io.on('connection', (socket) => {
 
   socket.on('quizLock', () => {
     quizManager.handleLock(socket.id);
+  });
+
+  socket.on('playerReaction', (reactionType) => {
+    const team = gameState.teams.find(t => t.id === socket.id);
+    if (team) {
+      io.emit('reactionTriggered', {
+        type: reactionType,
+        teamId: team.id,
+        teamName: team.name,
+        teamColor: team.color
+      });
+    }
+  });
+
+  socket.on('triggerAnimation', (type) => {
+    io.emit('triggerAnimation', type);
+  });
+
+  socket.on('toggleLeaderboard', (show) => {
+    gameState.showLeaderboard = show;
+    io.emit('gameStateUpdate', gameState);
   });
 
   socket.on('disconnect', () => {

@@ -14,10 +14,34 @@ export interface QuizQuestion {
   correctOptionIndex: number;
 }
 
+export interface GameHistoryEntry {
+  id: string;
+  gameType: string;
+  timestamp: number;
+  scores: { teamId: string; teamName: string; score: number }[];
+}
+
 export interface QuizAnswer {
   optionIndex: number;
   locked: boolean;
   timestamp: number;
+}
+
+export interface ServerToClientEvents {
+  gameStateUpdate: (state: GameState) => void;
+  reactionTriggered: (payload: { type: string; teamId: string; teamName: string; teamColor: string }) => void;
+  triggerAnimation: (type: string) => void;
+}
+
+export interface ClientToServerEvents {
+  joinTeam: (teamName: string) => void;
+  adminAction: (action: any) => void;
+  quizAnswer: (optionIndex: number) => void;
+  quizLock: () => void;
+  quizAdminAction: (action: { type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: any }) => void;
+  playerReaction: (reactionType: string) => void;
+  triggerAnimation: (type: string) => void;
+  toggleLeaderboard: (show: boolean) => void;
 }
 
 export interface QuizState {
@@ -38,4 +62,6 @@ export interface GameState {
   teams: Team[];
   activeRound: string | null;
   quiz: QuizState;
+  history: GameHistoryEntry[];
+  showLeaderboard: boolean;
 }

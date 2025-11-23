@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { GameState } from '@/types';
 import PlayerQuizView from '../games/quiz/PlayerQuizView';
+import ReactionPad from '@/components/ReactionPad';
 
 export default function PlayerView() {
   const { isConnected, socket } = useSocket();
@@ -58,6 +60,8 @@ export default function PlayerView() {
     );
   }
 
+
+
   if (gameState?.activeRound === 'QUIZ' && gameState) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
@@ -71,12 +75,8 @@ export default function PlayerView() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
       <div className="text-center space-y-8">
         <h1 className="text-2xl font-bold">{teamName}</h1>
-        <Button 
-          size="lg" 
-          className="w-64 h-64 rounded-full text-4xl font-bold shadow-xl active:scale-95 transition-transform bg-red-500 hover:bg-red-600"
-        >
-          BUZZ!
-        </Button>
+        <p className="text-muted-foreground">Waiting for next game...</p>
+        <ReactionPad />
       </div>
     </div>
   );

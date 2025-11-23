@@ -33,15 +33,26 @@ export interface QuizState {
   answers: Record<string, QuizAnswer>; // teamId -> answer
 }
 
+export interface GameHistoryEntry {
+  id: string;
+  gameType: string;
+  timestamp: number;
+  scores: { teamId: string; teamName: string; score: number }[];
+}
+
 export interface GameState {
   phase: GamePhase;
   teams: Team[];
   activeRound: string | null;
   quiz: QuizState;
+  history: GameHistoryEntry[];
+  showLeaderboard: boolean; // Global leaderboard toggle
 }
 
 export interface ServerToClientEvents {
   gameStateUpdate: (state: GameState) => void;
+  reactionTriggered: (payload: { type: string; teamId: string; teamName: string; teamColor: string }) => void;
+  triggerAnimation: (type: string) => void;
 }
 
 export interface ClientToServerEvents {
@@ -49,5 +60,8 @@ export interface ClientToServerEvents {
   adminAction: (action: any) => void;
   quizAnswer: (optionIndex: number) => void;
   quizLock: () => void;
-  quizAdminAction: (action: { type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL', payload?: any }) => void;
+  quizAdminAction: (action: { type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: any }) => void;
+  playerReaction: (reactionType: string) => void;
+  triggerAnimation: (type: string) => void;
+  toggleLeaderboard: (show: boolean) => void;
 }

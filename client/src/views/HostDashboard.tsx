@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { GameState } from '../types';
 
 import HostQuizControl from '../games/quiz/HostQuizControl';
@@ -31,47 +32,137 @@ export default function HostDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-6">
+      <Tabs defaultValue="game" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 mb-8">
+          <TabsTrigger value="game">Game Control</TabsTrigger>
+          <TabsTrigger value="teams">Teams & Scoreboard</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="game">
+          <div className="grid grid-cols-1 gap-6">
+            <div className="space-y-6">
+              {!gameState?.activeRound ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Game Selection</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-4">
+                    <Button 
+                      className="h-32 text-xl flex flex-col gap-2"
+                      onClick={() => socket?.emit('quizAdminAction', { type: 'SETUP' })}
+                    >
+                      <span className="text-4xl">🧠</span>
+                      Life Quiz
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="h-32 text-xl flex flex-col gap-2 opacity-50 cursor-not-allowed"
+                    >
+                      <span className="text-4xl">🎤</span>
+                      Karaoke (Soon)
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  {gameState.activeRound === 'QUIZ' && (
+                    <HostQuizControl gameState={gameState} />
+                  )}
+                  <Button 
+                    variant="secondary" 
+                    className="w-full mt-4"
+                    onClick={() => socket?.emit('quizAdminAction', { type: 'CANCEL' })}
+                  >
+                    Reset / Back to Lobby
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="teams">
+          <div className="grid grid-cols-1 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Global Controls</CardTitle>
+              </CardHeader>
+              <CardContent className="flex gap-4">
+                <Button 
+                  variant={gameState?.showLeaderboard ? "default" : "outline"}
+                  onClick={() => socket?.emit('toggleLeaderboard', !gameState?.showLeaderboard)}
+                >
+                  {gameState?.showLeaderboard ? 'Hide Leaderboard' : 'Show Leaderboard'}
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => socket?.emit('triggerAnimation', 'confetti')}
+                >
+                  🎉 Trigger Confetti
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Teams ({gameState?.teams.length || 0})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {gameState?.teams.length === 0 ? (
+                  <p className="text-muted-foreground">No teams joined yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {gameState?.teams.map((team) => (
+                      <li key={team.id} className="flex justify-between items-center p-2 bg-secondary rounded-md">
+                        <span className="font-medium" style={{ color: team.color }}>{team.name}</span>
+                        <span>{team.score} pts</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history">
           <Card>
             <CardHeader>
-              <CardTitle>Game Control</CardTitle>
+              <CardTitle>Game History</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {!gameState?.activeRound && (
-                <Button className="w-full" onClick={() => socket?.emit('quizAdminAction', { type: 'SETUP' })}>
-                  Start Life Quiz
-                </Button>
+            <CardContent>
+              {!gameState?.history?.length ? (
+                <p className="text-muted-foreground">No games played yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {gameState.history.slice().reverse().map((game) => (
+                    <div key={game.id} className="p-4 bg-secondary rounded-md">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-bold">{game.gameType}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {new Date(game.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <div className="text-sm space-y-1">
+                        {game.scores
+                          .sort((a, b) => b.score - a.score)
+                          .slice(0, 3)
+                          .map((score, i) => (
+                            <div key={score.teamId} className="flex justify-between">
+                              <span>#{i + 1} {score.teamName}</span>
+                              <span>{score.score} pts</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-              <Button variant="secondary" className="w-full">Reset Round</Button>
             </CardContent>
           </Card>
-          
-          {gameState?.activeRound === 'QUIZ' && gameState && (
-            <HostQuizControl gameState={gameState} />
-          )}
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Teams ({gameState?.teams.length || 0})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {gameState?.teams.length === 0 ? (
-              <p className="text-muted-foreground">No teams joined yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {gameState?.teams.map((team) => (
-                  <li key={team.id} className="flex justify-between items-center p-2 bg-secondary rounded-md">
-                    <span className="font-medium" style={{ color: team.color }}>{team.name}</span>
-                    <span>{team.score} pts</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
