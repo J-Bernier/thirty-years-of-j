@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import HostDashboard from './views/HostDashboard';
 import PlayerView from './views/PlayerView';
 import DisplayView from './views/DisplayView';
+import Login from './views/Login';
+import RequireAuth from './components/RequireAuth';
 
 function Home() {
   return (
@@ -32,7 +34,12 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/host" element={<HostDashboard />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/host" element={
+            <RequireAuth>
+              <HostDashboard />
+            </RequireAuth>
+          } />
           <Route path="/player" element={<PlayerView />} />
           <Route path="/display" element={<DisplayView />} />
         </Routes>

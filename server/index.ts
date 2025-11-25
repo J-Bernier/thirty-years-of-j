@@ -16,6 +16,10 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 });
 
 import { QuizManager } from './games/quiz';
+import { db } from './firebase';
+
+const GAME_STATE_DOC_ID = 'current_game_state';
+const GAME_STATE_COLLECTION = 'game_states';
 
 let gameState: GameState = {
   phase: 'LOBBY',
@@ -34,10 +38,48 @@ let gameState: GameState = {
   }
 };
 
+// Debounce save function to prevent excessive writes
+let saveTimeout: NodeJS.Timeout | null = null;
+const saveGameState = (state: GameState) => {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async () => {
+    try {
+      await db.collection(GAME_STATE_COLLECTION).doc(GAME_STATE_DOC_ID).set(state);
+      console.log('Game state saved to Firestore');
+    } catch (error) {
+      console.error('Error saving game state:', error);
+    }
+  }, 1000); // Save at most once per second
+};
+
+// Load initial state
+const loadGameState = async () => {
+  try {
+    const doc = await db.collection(GAME_STATE_COLLECTION).doc(GAME_STATE_DOC_ID).get();
+    if (doc.exists) {
+      const data = doc.data() as GameState;
+      // Merge with default state to ensure structure is valid
+      gameState = { ...gameState, ...data };
+      console.log('Game state loaded from Firestore');
+    } else {
+      console.log('No existing game state found, using default');
+    }
+  } catch (error) {
+    console.error('Error loading game state:', error);
+  }
+};
+
+// Load state immediately
+loadGameState();
+
+
 const quizManager = new QuizManager(
   io,
   () => gameState,
-  (newState) => { gameState = newState; }
+  (newState) => { 
+    gameState = newState;
+    saveGameState(gameState);
+  }
 );
 
 io.on('connection', (socket) => {
@@ -54,6 +96,7 @@ io.on('connection', (socket) => {
       color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color
     };
     gameState.teams.push(newTeam);
+    saveGameState(gameState);
     io.emit('gameStateUpdate', gameState);
     console.log(`Team joined: ${teamName}`);
   });
@@ -88,6 +131,7 @@ io.on('connection', (socket) => {
 
   socket.on('toggleLeaderboard', (show) => {
     gameState.showLeaderboard = show;
+    saveGameState(gameState);
     io.emit('gameStateUpdate', gameState);
   });
 

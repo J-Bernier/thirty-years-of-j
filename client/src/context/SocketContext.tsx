@@ -19,7 +19,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   useEffect(() => {
     // In production, this URL should be an environment variable
-    const socketInstance = io('http://localhost:3000');
+    const socketInstance = io(import.meta.env.VITE_SERVER_URL || 'http://localhost:3000');
 
     socketInstance.on('connect', () => {
       console.log('Connected to server');
