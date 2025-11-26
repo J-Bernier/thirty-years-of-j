@@ -1,5 +1,6 @@
 export interface Team {
-  id: string;
+  id: string; // Persistent Player ID
+  socketId: string; // Current Socket ID
   name: string;
   score: number;
   color: string;
@@ -66,7 +67,7 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  joinTeam: (teamName: string) => void;
+  joinTeam: (payload: { name: string; playerId: string }) => void;
   adminAction: (action: any) => void;
   quizAnswer: (optionIndex: number) => void;
   quizLock: () => void;

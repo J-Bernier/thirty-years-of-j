@@ -40,14 +40,19 @@ let gameState: GameState = {
 
 // Debounce save function to prevent excessive writes
 let saveTimeout: NodeJS.Timeout | null = null;
+let saveEnabled = true;
+
 const saveGameState = (state: GameState) => {
+  if (!saveEnabled) return;
   if (saveTimeout) clearTimeout(saveTimeout);
+  
   saveTimeout = setTimeout(async () => {
     try {
       await db.collection(GAME_STATE_COLLECTION).doc(GAME_STATE_DOC_ID).set(state);
       console.log('Game state saved to Firestore');
     } catch (error) {
-      console.error('Error saving game state:', error);
+      console.error('Error saving game state (disabling persistence):', error);
+      saveEnabled = false; // Disable future saves to prevent log spam/crashes
     }
   }, 1000); // Save at most once per second
 };
@@ -65,7 +70,8 @@ const loadGameState = async () => {
       console.log('No existing game state found, using default');
     }
   } catch (error) {
-    console.error('Error loading game state:', error);
+    console.error('Error loading game state (using default):', error);
+    saveEnabled = false; // Disable saving if loading failed (likely auth issue)
   }
 };
 
@@ -88,17 +94,40 @@ io.on('connection', (socket) => {
   // Send initial state
   socket.emit('gameStateUpdate', gameState);
 
-  socket.on('joinTeam', (teamName: string) => {
-    const newTeam = {
-      id: socket.id,
-      name: teamName,
-      score: 0,
-      color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color
-    };
-    gameState.teams.push(newTeam);
+  // Map to track disconnection timeouts
+  const disconnectTimeouts = new Map<string, NodeJS.Timeout>();
+
+  socket.on('joinTeam', ({ name, playerId }: { name: string, playerId: string }) => {
+    // Check if team already exists (reconnection)
+    const existingTeam = gameState.teams.find(t => t.id === playerId);
+
+    if (existingTeam) {
+      // Reconnect
+      existingTeam.socketId = socket.id;
+      existingTeam.name = name; // Update name just in case
+      
+      // Clear any pending disconnect timeout
+      if (disconnectTimeouts.has(playerId)) {
+        clearTimeout(disconnectTimeouts.get(playerId)!);
+        disconnectTimeouts.delete(playerId);
+      }
+      
+      console.log(`Team reconnected: ${name} (${playerId})`);
+    } else {
+      // New Team
+      const newTeam = {
+        id: playerId,
+        socketId: socket.id,
+        name: name,
+        score: 0,
+        color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color
+      };
+      gameState.teams.push(newTeam);
+      console.log(`Team joined: ${name} (${playerId})`);
+    }
+    
     saveGameState(gameState);
     io.emit('gameStateUpdate', gameState);
-    console.log(`Team joined: ${teamName}`);
   });
 
   socket.on('quizAdminAction', (action) => {
@@ -106,15 +135,21 @@ io.on('connection', (socket) => {
   });
 
   socket.on('quizAnswer', (optionIndex) => {
-    quizManager.handleAnswer(socket.id, optionIndex);
+    const team = gameState.teams.find(t => t.socketId === socket.id);
+    if (team) {
+      quizManager.handleAnswer(team.id, optionIndex);
+    }
   });
 
   socket.on('quizLock', () => {
-    quizManager.handleLock(socket.id);
+    const team = gameState.teams.find(t => t.socketId === socket.id);
+    if (team) {
+      quizManager.handleLock(team.id);
+    }
   });
 
   socket.on('playerReaction', (reactionType) => {
-    const team = gameState.teams.find(t => t.id === socket.id);
+    const team = gameState.teams.find(t => t.socketId === socket.id);
     if (team) {
       io.emit('reactionTriggered', {
         type: reactionType,
@@ -136,7 +171,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('sendChatMessage', (text) => {
-    const team = gameState.teams.find(t => t.id === socket.id);
+    const team = gameState.teams.find(t => t.socketId === socket.id);
     if (team) {
       const message = {
         id: Math.random().toString(36).substring(7),
@@ -152,8 +187,24 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('user disconnected', socket.id);
-    // Optional: Remove team on disconnect? Or keep them for reconnection?
-    // For now, let's keep them but maybe mark as disconnected later.
+    const team = gameState.teams.find(t => t.socketId === socket.id);
+    
+    if (team) {
+      // Set a timeout to remove the team after a grace period
+      const timeout = setTimeout(() => {
+        const currentTeamIndex = gameState.teams.findIndex(t => t.id === team.id);
+        if (currentTeamIndex !== -1) {
+          const removedTeam = gameState.teams[currentTeamIndex];
+          gameState.teams.splice(currentTeamIndex, 1);
+          saveGameState(gameState);
+          io.emit('gameStateUpdate', gameState);
+          console.log(`Team removed after timeout: ${removedTeam.name}`);
+        }
+        disconnectTimeouts.delete(team.id);
+      }, 10000); // 10 seconds grace period
+
+      disconnectTimeouts.set(team.id, timeout);
+    }
   });
 });
 

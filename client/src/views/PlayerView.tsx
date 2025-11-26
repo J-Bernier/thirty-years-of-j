@@ -16,22 +16,46 @@ export default function PlayerView() {
   const [joined, setJoined] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
+  const [playerId, setPlayerId] = useState<string>('');
+
+  useEffect(() => {
+    // Initialize or retrieve persistent player ID
+    let storedId = localStorage.getItem('playerId');
+    if (!storedId) {
+      storedId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('playerId', storedId);
+    }
+    setPlayerId(storedId);
+
+    // Restore team name if available
+    const storedName = localStorage.getItem('teamName');
+    if (storedName) {
+      setTeamName(storedName);
+    }
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
 
     socket.on('gameStateUpdate', (state: GameState) => {
       setGameState(state);
+      
+      // Check if we are already in the game (reconnection)
+      if (playerId && state.teams.some(t => t.id === playerId)) {
+        console.log('Auto-rejoining game with ID:', playerId);
+        setJoined(true);
+      }
     });
 
     return () => {
       socket.off('gameStateUpdate');
     };
-  }, [socket]);
+  }, [socket, playerId]);
 
   const handleJoin = () => {
-    if (teamName.trim() && isConnected && socket) {
-      socket.emit('joinTeam', teamName);
+    if (teamName.trim() && isConnected && socket && playerId) {
+      socket.emit('joinTeam', { name: teamName, playerId });
+      localStorage.setItem('teamName', teamName);
       setJoined(true);
     }
   };
