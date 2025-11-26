@@ -185,6 +185,10 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('adminPlayMedia', (payload) => {
+    io.emit('playMedia', payload);
+  });
+
   socket.on('disconnect', () => {
     console.log('user disconnected', socket.id);
     const team = gameState.teams.find(t => t.socketId === socket.id);

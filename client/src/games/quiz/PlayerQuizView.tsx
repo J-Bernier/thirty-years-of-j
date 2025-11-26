@@ -6,13 +6,13 @@ import type { GameState } from '@/types';
 
 interface PlayerQuizViewProps {
   gameState: GameState;
+  playerId: string;
 }
 
-export default function PlayerQuizView({ gameState }: PlayerQuizViewProps) {
+export default function PlayerQuizView({ gameState, playerId }: PlayerQuizViewProps) {
   const { socket } = useSocket();
   const quiz = gameState.quiz;
-  const myTeamId = socket?.id;
-  const myAnswer = myTeamId ? quiz.answers[myTeamId] : null;
+  const myAnswer = playerId ? quiz.answers[playerId] : null;
   
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
 
@@ -55,6 +55,11 @@ export default function PlayerQuizView({ gameState }: PlayerQuizViewProps) {
               <span>Question {quiz.currentQuestionIndex + 1}</span>
             )}
           </CardTitle>
+          {quiz.phase === 'QUESTION' && (
+            <div className="text-lg font-medium text-center mt-2">
+              {quiz.currentQuestion.text}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="text-center text-xl font-bold">

@@ -59,11 +59,18 @@ export interface ChatMessage {
   teamColor: string;
 }
 
+export interface MediaPayload {
+  type: 'video' | 'audio';
+  url: string;
+  duration?: number;
+}
+
 export interface ServerToClientEvents {
   gameStateUpdate: (state: GameState) => void;
   reactionTriggered: (payload: { type: string; teamId: string; teamName: string; teamColor: string }) => void;
   triggerAnimation: (type: string) => void;
   chatMessage: (message: ChatMessage) => void;
+  playMedia: (payload: MediaPayload) => void;
 }
 
 export interface ClientToServerEvents {
@@ -76,4 +83,5 @@ export interface ClientToServerEvents {
   triggerAnimation: (type: string) => void;
   toggleLeaderboard: (show: boolean) => void;
   sendChatMessage: (text: string) => void;
+  adminPlayMedia: (payload: MediaPayload) => void;
 }

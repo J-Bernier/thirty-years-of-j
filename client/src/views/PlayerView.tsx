@@ -102,7 +102,7 @@ export default function PlayerView() {
 
       <div className="flex-grow flex flex-col items-center justify-center w-full">
         {gameState?.activeRound === 'QUIZ' && gameState ? (
-          <PlayerQuizView gameState={gameState} />
+          <PlayerQuizView gameState={gameState} playerId={playerId} />
         ) : (
           <div className="text-center space-y-8">
             <p className="text-muted-foreground">Waiting for next game...</p>

@@ -42,6 +42,57 @@ export default function HostDashboard() {
         <TabsContent value="game">
           <div className="grid grid-cols-1 gap-6">
             <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Broadcast Control</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Display</h3>
+                      <div className="flex flex-wrap gap-2">
+                        <Button 
+                          variant={gameState?.showLeaderboard ? "default" : "outline"}
+                          onClick={() => socket?.emit('toggleLeaderboard', !gameState?.showLeaderboard)}
+                        >
+                          {gameState?.showLeaderboard ? 'Hide Leaderboard' : 'Show Leaderboard'}
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Media</h3>
+                      <div className="flex flex-wrap gap-2">
+                        <Button 
+                          variant="outline"
+                          onClick={() => socket?.emit('triggerAnimation', 'confetti')}
+                        >
+                          🎉 Confetti
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => socket?.emit('adminPlayMedia', { type: 'audio', url: 'https://www.soundjay.com/human/applause-01.mp3', duration: 5 })}
+                        >
+                          👏 Applause
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => socket?.emit('adminPlayMedia', { type: 'audio', url: 'https://www.soundjay.com/human/boo-01.mp3', duration: 3 })}
+                        >
+                          👎 Boo
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => socket?.emit('adminPlayMedia', { type: 'video', url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7abKhOpu0NwenH3O/giphy.mp4', duration: 5 })}
+                        >
+                          🎉 Celebration GIF
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               {!gameState?.activeRound ? (
                 <Card>
                   <CardHeader>
@@ -84,25 +135,7 @@ export default function HostDashboard() {
 
         <TabsContent value="teams">
           <div className="grid grid-cols-1 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Global Controls</CardTitle>
-              </CardHeader>
-              <CardContent className="flex gap-4">
-                <Button 
-                  variant={gameState?.showLeaderboard ? "default" : "outline"}
-                  onClick={() => socket?.emit('toggleLeaderboard', !gameState?.showLeaderboard)}
-                >
-                  {gameState?.showLeaderboard ? 'Hide Leaderboard' : 'Show Leaderboard'}
-                </Button>
-                <Button 
-                  variant="outline"
-                  onClick={() => socket?.emit('triggerAnimation', 'confetti')}
-                >
-                  🎉 Trigger Confetti
-                </Button>
-              </CardContent>
-            </Card>
+
 
             <Card>
               <CardHeader>
