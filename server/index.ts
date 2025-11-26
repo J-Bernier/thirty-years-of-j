@@ -135,6 +135,21 @@ io.on('connection', (socket) => {
     io.emit('gameStateUpdate', gameState);
   });
 
+  socket.on('sendChatMessage', (text) => {
+    const team = gameState.teams.find(t => t.id === socket.id);
+    if (team) {
+      const message = {
+        id: Math.random().toString(36).substring(7),
+        teamId: team.id,
+        teamName: team.name,
+        text,
+        timestamp: Date.now(),
+        teamColor: team.color
+      };
+      io.emit('chatMessage', message);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('user disconnected', socket.id);
     // Optional: Remove team on disconnect? Or keep them for reconnection?

@@ -49,10 +49,20 @@ export interface GameState {
   showLeaderboard: boolean; // Global leaderboard toggle
 }
 
+export interface ChatMessage {
+  id: string;
+  teamId: string;
+  teamName: string;
+  text: string;
+  timestamp: number;
+  teamColor: string;
+}
+
 export interface ServerToClientEvents {
   gameStateUpdate: (state: GameState) => void;
   reactionTriggered: (payload: { type: string; teamId: string; teamName: string; teamColor: string }) => void;
   triggerAnimation: (type: string) => void;
+  chatMessage: (message: ChatMessage) => void;
 }
 
 export interface ClientToServerEvents {
@@ -64,4 +74,5 @@ export interface ClientToServerEvents {
   playerReaction: (reactionType: string) => void;
   triggerAnimation: (type: string) => void;
   toggleLeaderboard: (show: boolean) => void;
+  sendChatMessage: (text: string) => void;
 }

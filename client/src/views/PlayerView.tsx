@@ -7,12 +7,15 @@ import { Input } from '@/components/ui/input';
 import type { GameState } from '@/types';
 import PlayerQuizView from '../games/quiz/PlayerQuizView';
 import ReactionPad from '@/components/ReactionPad';
-
+import { Smile } from 'lucide-react';
+import ChatBox from '@/components/ChatBox';
+import Modal from '@/components/ui/modal';
 export default function PlayerView() {
   const { isConnected, socket } = useSocket();
   const [teamName, setTeamName] = useState('');
   const [joined, setJoined] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
 
   useEffect(() => {
     if (!socket) return;
@@ -31,6 +34,10 @@ export default function PlayerView() {
       socket.emit('joinTeam', teamName);
       setJoined(true);
     }
+  };
+
+  const handleSendChat = (message: string) => {
+    socket?.emit('sendChatMessage', message);
   };
 
   if (!joined) {
@@ -60,24 +67,32 @@ export default function PlayerView() {
     );
   }
 
-
-
-  if (gameState?.activeRound === 'QUIZ' && gameState) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
-        <div className="mb-4 font-bold text-lg">{teamName}</div>
-        <PlayerQuizView gameState={gameState} />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
-      <div className="text-center space-y-8">
-        <h1 className="text-2xl font-bold">{teamName}</h1>
-        <p className="text-muted-foreground">Waiting for next game...</p>
-        <ReactionPad />
+    <div className="min-h-screen flex flex-col p-4 bg-slate-50">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="font-bold text-lg">{teamName}</h1>
+        <Button variant="outline" size="sm" onClick={() => setIsReactionModalOpen(true)}>
+          <Smile className="h-4 w-4 mr-2" /> Reactions
+        </Button>
       </div>
+
+      <div className="flex-grow flex flex-col items-center justify-center w-full">
+        {gameState?.activeRound === 'QUIZ' && gameState ? (
+          <PlayerQuizView gameState={gameState} />
+        ) : (
+          <div className="text-center space-y-8">
+            <p className="text-muted-foreground">Waiting for next game...</p>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-auto pt-4 w-full max-w-md mx-auto sticky bottom-0 bg-slate-50 pb-2">
+        <ChatBox onSend={handleSendChat} disabled={!isConnected} />
+      </div>
+
+      <Modal isOpen={isReactionModalOpen} onClose={() => setIsReactionModalOpen(false)} title="Reactions">
+        <ReactionPad />
+      </Modal>
     </div>
   );
 }
