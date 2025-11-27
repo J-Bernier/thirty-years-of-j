@@ -61,6 +61,7 @@ export interface ClientToServerEvents {
   toggleLeaderboard: (show: boolean) => void;
   sendChatMessage: (text: string) => void;
   adminPlayMedia: (payload: MediaPayload) => void;
+  adminUpdateScore: (payload: { teamId: string; delta: number }) => void;
 }
 
 export interface QuizState {
@@ -74,6 +75,7 @@ export interface QuizState {
   timer: number;
   phase: 'IDLE' | 'QUESTION' | 'REVEAL' | 'END';
   answers: Record<string, QuizAnswer>;
+  gameScores: Record<string, number>;
 }
 
 export interface GameState {

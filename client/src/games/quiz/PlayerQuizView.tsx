@@ -40,6 +40,23 @@ export default function PlayerQuizView({ gameState, playerId }: PlayerQuizViewPr
     }
   };
 
+  if (quiz.phase === 'END') {
+    return (
+      <div className="w-full max-w-md mx-auto p-4 text-center">
+        <Card>
+          <CardHeader>
+            <CardTitle>Game Finished!</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg text-muted-foreground">
+              Check the main screen for the final results.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!quiz.currentQuestion) return <div>Waiting for question...</div>;
 
   return (

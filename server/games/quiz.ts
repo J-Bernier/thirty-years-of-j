@@ -1,5 +1,5 @@
-import { Server } from 'socket.io';
-import { GameState, QuizQuestion, ServerToClientEvents, ClientToServerEvents } from '../types';
+import {Server} from 'socket.io';
+import {GameState, QuizQuestion, ServerToClientEvents, ClientToServerEvents} from '../types';
 
 // Sample questions for testing
 const SAMPLE_QUESTIONS: QuizQuestion[] = [
@@ -118,8 +118,13 @@ export class QuizManager {
       currentQuestionIndex: -1,
       timer: 0,
       phase: 'IDLE',
-      answers: {}
+      answers: {},
+      gameScores: {}
     };
+    // Initialize game scores for all current teams
+    state.teams.forEach(team => {
+      state.quiz.gameScores[team.id] = 0;
+    });
     this.setGameState(state);
     this.io.emit('gameStateUpdate', state);
   }
@@ -212,8 +217,9 @@ export class QuizManager {
       state.teams.forEach(team => {
         const answer = state.quiz.answers[team.id];
         if (answer && answer.locked && answer.optionIndex === correctIndex) {
-          team.score += 10; // Base points
-          // Bonus for speed could go here
+          // Update game score instead of global score
+          if (!state.quiz.gameScores[team.id]) state.quiz.gameScores[team.id] = 0;
+          state.quiz.gameScores[team.id] += 10;
         }
       });
     }
@@ -225,6 +231,27 @@ export class QuizManager {
   private skipToEnd() {
     this.stopTimer();
     const state = this.getGameState();
+    
+    // Add game scores to global scores
+    state.teams.forEach(team => {
+      const gameScore = state.quiz.gameScores[team.id] || 0;
+      team.score += gameScore;
+    });
+
+    // Record history
+    if (state.teams.some(t => (state.quiz.gameScores[t.id] || 0) > 0)) {
+      state.history.push({
+        id: Date.now().toString(),
+        gameType: 'Life Quiz',
+        timestamp: Date.now(),
+        scores: state.teams.map(t => ({ 
+          teamId: t.id, 
+          teamName: t.name, 
+          score: state.quiz.gameScores[t.id] || 0 
+        }))
+      });
+    }
+
     state.quiz.phase = 'END';
     this.setGameState(state);
     this.io.emit('gameStateUpdate', state);
@@ -233,16 +260,6 @@ export class QuizManager {
   private cancelQuiz() {
     this.stopTimer();
     const state = this.getGameState();
-    
-    // Record history if scores > 0
-    if (state.teams.some(t => t.score > 0)) {
-      state.history.push({
-        id: Date.now().toString(),
-        gameType: 'Life Quiz',
-        timestamp: Date.now(),
-        scores: state.teams.map(t => ({ teamId: t.id, teamName: t.name, score: t.score }))
-      });
-    }
 
     state.phase = 'LOBBY';
     state.activeRound = null;

@@ -53,9 +53,15 @@ export default function HostDashboard() {
                       <div className="flex flex-wrap gap-2">
                         <Button 
                           variant={gameState?.showLeaderboard ? "default" : "outline"}
-                          onClick={() => socket?.emit('toggleLeaderboard', !gameState?.showLeaderboard)}
+                          onClick={() => socket?.emit('toggleLeaderboard', true)}
                         >
-                          {gameState?.showLeaderboard ? 'Hide Leaderboard' : 'Show Leaderboard'}
+                          Show Global Leaderboard
+                        </Button>
+                        <Button 
+                          variant={!gameState?.showLeaderboard ? "default" : "outline"}
+                          onClick={() => socket?.emit('toggleLeaderboard', false)}
+                        >
+                          Show Game Leaderboard
                         </Button>
                       </div>
                     </div>
@@ -77,7 +83,7 @@ export default function HostDashboard() {
                         </Button>
                         <Button 
                           variant="outline"
-                          onClick={() => socket?.emit('adminPlayMedia', { type: 'audio', url: 'https://www.soundjay.com/human/boo-01.mp3', duration: 3 })}
+                          onClick={() => socket?.emit('adminPlayMedia', { type: 'audio', url: '/assets/sounds/boo.mp3', duration: 3 })}
                         >
                           👎 Boo
                         </Button>
@@ -149,7 +155,39 @@ export default function HostDashboard() {
                     {gameState?.teams.map((team) => (
                       <li key={team.id} className="flex justify-between items-center p-2 bg-secondary rounded-md">
                         <span className="font-medium" style={{ color: team.color }}>{team.name}</span>
-                        <span>{team.score} pts</span>
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => socket?.emit('adminUpdateScore', { teamId: team.id, delta: -10 })}
+                            >
+                              -10
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => socket?.emit('adminUpdateScore', { teamId: team.id, delta: -1 })}
+                            >
+                              -1
+                            </Button>
+                            <span className="font-bold w-12 text-center">{team.score} pts</span>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => socket?.emit('adminUpdateScore', { teamId: team.id, delta: 1 })}
+                            >
+                              +1
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => socket?.emit('adminUpdateScore', { teamId: team.id, delta: 10 })}
+                            >
+                              +10
+                            </Button>
+                          </div>
+                        </div>
                       </li>
                     ))}
                   </ul>

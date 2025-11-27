@@ -18,20 +18,24 @@ export default function DisplayQuizView({ gameState }: DisplayQuizViewProps) {
   }
   
   if (quiz.phase === 'END') {
-    const sortedTeams = [...gameState.teams].sort((a, b) => b.score - a.score);
+    const sortedTeams = [...gameState.teams].sort((a, b) => {
+      const scoreA = quiz.gameScores?.[a.id] || 0;
+      const scoreB = quiz.gameScores?.[b.id] || 0;
+      return scoreB - scoreA;
+    });
     
     return (
-      <div className="w-full max-w-4xl mx-auto p-8 text-center">
-        <h1 className="text-6xl font-bold mb-12 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
-          Leaderboard
+      <div className="w-full max-w-4xl mx-auto p-8 text-center animate-in fade-in zoom-in duration-500 bg-black/30 backdrop-blur-md rounded-3xl border border-white/10 shadow-2xl">
+        <h1 className="text-6xl font-bold mb-12 text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-yellow-500 drop-shadow-sm">
+          Life Quiz Rankings
         </h1>
         <div className="space-y-4">
           {sortedTeams.map((team, index) => (
-            <div key={team.id} className="flex items-center p-6 bg-slate-900 rounded-xl border border-slate-800">
-              <div className="text-4xl font-bold text-slate-500 w-16">#{index + 1}</div>
-              <div className="w-6 h-6 rounded-full mr-4" style={{ backgroundColor: team.color }} />
-              <div className="text-3xl font-bold flex-grow text-left">{team.name}</div>
-              <div className="text-4xl font-bold text-yellow-400">{team.score} pts</div>
+            <div key={team.id} className="flex items-center p-6 bg-white/10 rounded-xl border border-white/5 relative hover:bg-white/20 transition-colors">
+              <div className="text-4xl font-bold text-amber-500/80 w-16">#{index + 1}</div>
+              <div className="w-6 h-6 rounded-full mr-4 shadow-lg" style={{ backgroundColor: team.color }} />
+              <div className="text-3xl font-bold flex-grow text-left text-white/90">{team.name}</div>
+              <div className="text-4xl font-bold text-yellow-400">{quiz.gameScores?.[team.id] || 0} pts</div>
             </div>
           ))}
         </div>

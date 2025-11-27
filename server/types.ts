@@ -32,6 +32,7 @@ export interface QuizState {
   timer: number;
   phase: 'IDLE' | 'QUESTION' | 'REVEAL' | 'END';
   answers: Record<string, QuizAnswer>; // teamId -> answer
+  gameScores: Record<string, number>; // teamId -> score for this game
 }
 
 export interface GameHistoryEntry {
@@ -84,4 +85,5 @@ export interface ClientToServerEvents {
   toggleLeaderboard: (show: boolean) => void;
   sendChatMessage: (text: string) => void;
   adminPlayMedia: (payload: MediaPayload) => void;
+  adminUpdateScore: (payload: { teamId: string; delta: number }) => void;
 }
