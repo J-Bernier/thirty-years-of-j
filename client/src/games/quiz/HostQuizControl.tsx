@@ -5,9 +5,10 @@ import type { GameState } from '@/types';
 
 interface HostQuizControlProps {
   gameState: GameState;
+  onAction: (action: () => void, duration?: number) => void;
 }
 
-export default function HostQuizControl({ gameState }: HostQuizControlProps) {
+export default function HostQuizControl({ gameState, onAction }: HostQuizControlProps) {
   const { socket } = useSocket();
   const quiz = gameState.quiz;
 
@@ -23,10 +24,10 @@ export default function HostQuizControl({ gameState }: HostQuizControlProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Button onClick={() => sendAction('START', { timePerQuestion: 30, totalQuestions: 5 })}>
+            <Button onClick={() => onAction(() => sendAction('START', { timePerQuestion: 30, totalQuestions: 5 }), 3000)}>
               Start Quiz (30s)
             </Button>
-            <Button onClick={() => sendAction('START', { timePerQuestion: 15, totalQuestions: 5 })} variant="secondary">
+            <Button onClick={() => onAction(() => sendAction('START', { timePerQuestion: 15, totalQuestions: 5 }), 3000)} variant="secondary">
               Start Blitz (15s)
             </Button>
           </div>
@@ -47,22 +48,22 @@ export default function HostQuizControl({ gameState }: HostQuizControlProps) {
         
         <div className="grid grid-cols-1 gap-4">
           {quiz.phase === 'QUESTION' && (
-            <Button onClick={() => sendAction('REVEAL')} className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
+            <Button onClick={() => onAction(() => sendAction('REVEAL'))} className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
               Reveal Answer
             </Button>
           )}
           
           {quiz.phase === 'REVEAL' && (
-            <Button onClick={() => sendAction('NEXT')} className="w-full">
+            <Button onClick={() => onAction(() => sendAction('NEXT'))} className="w-full">
               Next Question
             </Button>
           )}
           
-          <Button onClick={() => sendAction('CANCEL')} variant="destructive" className="w-full">
+          <Button onClick={() => onAction(() => sendAction('CANCEL'))} variant="destructive" className="w-full">
             End Quiz
           </Button>
 
-          <Button onClick={() => sendAction('SKIP_TO_END')} variant="outline" className="w-full">
+          <Button onClick={() => onAction(() => sendAction('SKIP_TO_END'))} variant="outline" className="w-full">
             Finish Quiz (Leaderboard)
           </Button>
         </div>

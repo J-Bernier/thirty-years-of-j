@@ -1,15 +1,23 @@
-import { useEffect, useState } from 'react';
-import { useSocket } from '../context/SocketContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { GameState } from '../types';
+import {useEffect, useState} from 'react';
+import {useSocket} from '../context/SocketContext';
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
+import {Button} from '@/components/ui/button';
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
+import type {GameState} from '../types';
 
 import HostQuizControl from '../games/quiz/HostQuizControl';
 
 export default function HostDashboard() {
   const { isConnected, socket } = useSocket();
   const [gameState, setGameState] = useState<GameState | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  const handleAction = (action: () => void, duration: number = 1000) => {
+    if (isBlocked) return;
+    action();
+    setIsBlocked(true);
+    setTimeout(() => setIsBlocked(false), duration);
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -53,13 +61,15 @@ export default function HostDashboard() {
                       <div className="flex flex-wrap gap-2">
                         <Button 
                           variant={gameState?.showLeaderboard ? "default" : "outline"}
-                          onClick={() => socket?.emit('toggleLeaderboard', true)}
+                          onClick={() => handleAction(() => socket?.emit('toggleLeaderboard', true), 1000)}
+                          disabled={isBlocked}
                         >
                           Show Global Leaderboard
                         </Button>
                         <Button 
                           variant={!gameState?.showLeaderboard ? "default" : "outline"}
-                          onClick={() => socket?.emit('toggleLeaderboard', false)}
+                          onClick={() => handleAction(() => socket?.emit('toggleLeaderboard', false), 1000)}
+                          disabled={isBlocked}
                         >
                           Show Game Leaderboard
                         </Button>
@@ -71,25 +81,29 @@ export default function HostDashboard() {
                       <div className="flex flex-wrap gap-2">
                         <Button 
                           variant="outline"
-                          onClick={() => socket?.emit('triggerAnimation', 'confetti')}
+                          onClick={() => handleAction(() => socket?.emit('triggerAnimation', 'confetti'), 2000)}
+                          disabled={isBlocked}
                         >
                           🎉 Confetti
                         </Button>
                         <Button 
                           variant="outline"
-                          onClick={() => socket?.emit('adminPlayMedia', { type: 'audio', url: 'https://www.soundjay.com/human/applause-01.mp3', duration: 5 })}
+                          onClick={() => handleAction(() => socket?.emit('adminPlayMedia', { type: 'audio', url: 'https://www.soundjay.com/human/applause-01.mp3', duration: 5 }), 5000)}
+                          disabled={isBlocked}
                         >
                           👏 Applause
                         </Button>
                         <Button 
                           variant="outline"
-                          onClick={() => socket?.emit('adminPlayMedia', { type: 'audio', url: '/assets/sounds/boo.mp3', duration: 3 })}
+                          onClick={() => handleAction(() => socket?.emit('adminPlayMedia', { type: 'audio', url: '/assets/sounds/boo.mp3', duration: 3 }), 3000)}
+                          disabled={isBlocked}
                         >
                           👎 Boo
                         </Button>
                         <Button 
                           variant="outline"
-                          onClick={() => socket?.emit('adminPlayMedia', { type: 'video', url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7abKhOpu0NwenH3O/giphy.mp4', duration: 5 })}
+                          onClick={() => handleAction(() => socket?.emit('adminPlayMedia', { type: 'video', url: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbXp4eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eXl5eSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7abKhOpu0NwenH3O/giphy.mp4', duration: 5 }), 5000)}
+                          disabled={isBlocked}
                         >
                           🎉 Celebration GIF
                         </Button>
@@ -107,7 +121,8 @@ export default function HostDashboard() {
                   <CardContent className="grid grid-cols-2 gap-4">
                     <Button 
                       className="h-32 text-xl flex flex-col gap-2"
-                      onClick={() => socket?.emit('quizAdminAction', { type: 'SETUP' })}
+                      onClick={() => handleAction(() => socket?.emit('quizAdminAction', { type: 'SETUP' }), 4000)}
+                      disabled={isBlocked}
                     >
                       <span className="text-4xl">🧠</span>
                       Life Quiz
@@ -124,12 +139,13 @@ export default function HostDashboard() {
               ) : (
                 <>
                   {gameState.activeRound === 'QUIZ' && (
-                    <HostQuizControl gameState={gameState} />
+                    <HostQuizControl gameState={gameState} onAction={handleAction} />
                   )}
                   <Button 
                     variant="secondary" 
                     className="w-full mt-4"
-                    onClick={() => socket?.emit('quizAdminAction', { type: 'CANCEL' })}
+                    onClick={() => handleAction(() => socket?.emit('quizAdminAction', { type: 'CANCEL' }), 1000)}
+                    disabled={isBlocked}
                   >
                     Reset / Back to Lobby
                   </Button>
