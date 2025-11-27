@@ -16,6 +16,27 @@ export default function HostQuizControl({ gameState, onAction }: HostQuizControl
     socket?.emit('quizAdminAction', { type, payload });
   };
 
+  const isLastQuestion = quiz.currentQuestionIndex === (quiz.config.totalQuestions || 0) - 1;
+
+  if (quiz.phase === 'END') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Quiz Finished</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-center mb-4">
+            <p className="text-xl">The quiz has ended.</p>
+            <p className="text-muted-foreground">The podium is currently displayed on the main screen.</p>
+          </div>
+          <Button onClick={() => onAction(() => sendAction('CANCEL'))} className="w-full">
+            Back to Welcome Screen
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (quiz.phase === 'IDLE') {
     return (
       <Card>
@@ -39,7 +60,7 @@ export default function HostQuizControl({ gameState, onAction }: HostQuizControl
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Quiz Control: Question {quiz.currentQuestionIndex + 1}</CardTitle>
+        <CardTitle>Quiz Control: Question {quiz.currentQuestionIndex + 1} / {quiz.config.totalQuestions}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-2xl font-bold text-center mb-4">
@@ -54,17 +75,21 @@ export default function HostQuizControl({ gameState, onAction }: HostQuizControl
           )}
           
           {quiz.phase === 'REVEAL' && (
-            <Button onClick={() => onAction(() => sendAction('NEXT'))} className="w-full">
-              Next Question
-            </Button>
+            <>
+              {isLastQuestion ? (
+                <Button onClick={() => onAction(() => sendAction('SKIP_TO_END'))} className="w-full bg-green-600 hover:bg-green-700 text-white">
+                  Go to End Screen (Podium)
+                </Button>
+              ) : (
+                <Button onClick={() => onAction(() => sendAction('NEXT'))} className="w-full">
+                  Next Question
+                </Button>
+              )}
+            </>
           )}
           
-          <Button onClick={() => onAction(() => sendAction('CANCEL'))} variant="destructive" className="w-full">
-            End Quiz
-          </Button>
-
-          <Button onClick={() => onAction(() => sendAction('SKIP_TO_END'))} variant="outline" className="w-full">
-            Finish Quiz (Leaderboard)
+          <Button onClick={() => onAction(() => sendAction('SKIP_TO_END'))} variant="destructive" className="w-full">
+            End Game Early (Go to Podium)
           </Button>
         </div>
 

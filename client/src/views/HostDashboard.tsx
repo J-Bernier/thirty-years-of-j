@@ -1,9 +1,9 @@
-import {useEffect, useState} from 'react';
-import {useSocket} from '../context/SocketContext';
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
-import {Button} from '@/components/ui/button';
-import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
-import type {GameState} from '../types';
+import { useEffect, useState } from 'react';
+import { useSocket } from '../context/SocketContext';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { GameState } from '../types';
 
 import HostQuizControl from '../games/quiz/HostQuizControl';
 
@@ -71,7 +71,7 @@ export default function HostDashboard() {
                           onClick={() => handleAction(() => socket?.emit('toggleLeaderboard', false), 1000)}
                           disabled={isBlocked}
                         >
-                          Show Game Leaderboard
+                          Show live screen
                         </Button>
                       </div>
                     </div>

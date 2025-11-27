@@ -1,5 +1,5 @@
-import {Server} from 'socket.io';
-import {GameState, QuizQuestion, ServerToClientEvents, ClientToServerEvents} from '../types';
+import { Server } from 'socket.io';
+import { GameState, QuizQuestion, ServerToClientEvents, ClientToServerEvents } from '../types';
 
 // Sample questions for testing
 const SAMPLE_QUESTIONS: QuizQuestion[] = [
@@ -132,7 +132,10 @@ export class QuizManager {
   private startQuiz(config: { timePerQuestion: number, totalQuestions: number }) {
     const state = this.getGameState();
     if (config) {
-      state.quiz.config = config;
+      state.quiz.config = {
+        ...config,
+        totalQuestions: Math.min(config.totalQuestions, SAMPLE_QUESTIONS.length)
+      };
     }
     // Start the first question immediately
     this.nextQuestion();
@@ -255,6 +258,7 @@ export class QuizManager {
     state.quiz.phase = 'END';
     this.setGameState(state);
     this.io.emit('gameStateUpdate', state);
+    this.io.emit('triggerAnimation', 'confetti');
   }
 
   private cancelQuiz() {
