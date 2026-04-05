@@ -22,8 +22,6 @@ export default function HostDashboard() {
     setTimeout(() => blockedActions.current.delete(key), duration);
   }, []);
 
-  const isBlocked = useCallback((key: string) => blockedActions.current.has(key), []);
-
   useEffect(() => {
     if (!socket) return;
     socket.on('gameStateUpdate', (state: GameState) => setGameState(state));
