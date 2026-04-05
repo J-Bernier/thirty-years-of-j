@@ -26,9 +26,11 @@ cd client && npm run lint        # ESLint
 # Server only
 cd server && npm run dev        # nodemon + ts-node on :3000
 cd server && npm run build      # tsc
-```
 
-No test suite exists yet.
+# Tests (server-side, Vitest)
+cd server && npm test           # run once
+cd server && npm run test:watch # watch mode
+```
 
 ## Architecture
 
