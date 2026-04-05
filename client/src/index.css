@@ -74,3 +74,28 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Game show display tokens (DESIGN.md) */
+:root {
+  --show-bg-base: #0a0a1a;
+  --show-bg-surface: #1a1a2e;
+  --show-accent: #e94560;
+  --show-accent-secondary: #00a8e8;
+  --show-success: #00c896;
+  --show-warning: #ffb700;
+  --show-text: #f0f0f0;
+  --show-text-muted: #888888;
+  --show-text-dim: #555555;
+}
+
+/* Timer pulse animation for <5s */
+@keyframes timer-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+
+/* Pulsing red border for disconnect */
+@keyframes disconnect-pulse {
+  0%, 100% { border-color: transparent; }
+  50% { border-color: #e94560; }
+}
