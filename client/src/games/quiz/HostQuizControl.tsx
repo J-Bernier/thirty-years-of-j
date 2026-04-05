@@ -5,32 +5,32 @@ import type { GameState } from '@/types';
 
 interface HostQuizControlProps {
   gameState: GameState;
-  onAction: (action: () => void, duration?: number) => void;
+  onAction: (key: string, action: () => void, duration?: number) => void;
 }
 
 export default function HostQuizControl({ gameState, onAction }: HostQuizControlProps) {
   const { socket } = useSocket();
   const quiz = gameState.quiz;
 
-  const sendAction = (type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: any) => {
+  const sendAction = (type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: Record<string, unknown>) => {
     socket?.emit('quizAdminAction', { type, payload });
   };
 
+  const answeredCount = gameState.teams.filter(t => quiz.answers[t.id]?.locked).length;
   const isLastQuestion = quiz.currentQuestionIndex === (quiz.config.totalQuestions || 0) - 1;
 
   if (quiz.phase === 'END') {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Quiz Finished</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-center mb-4">
-            <p className="text-xl">The quiz has ended.</p>
-            <p className="text-muted-foreground">The podium is currently displayed on the main screen.</p>
+        <CardContent className="py-6 space-y-4">
+          <div className="text-center">
+            <p className="text-lg font-semibold">Quiz finished — podium on screen</p>
           </div>
-          <Button onClick={() => onAction(() => sendAction('CANCEL'))} className="w-full">
-            Back to Welcome Screen
+          <Button
+            className="w-full min-h-[56px] text-lg font-bold"
+            onClick={() => onAction('back-lobby', () => sendAction('CANCEL'))}
+          >
+            Back to Lobby
           </Button>
         </CardContent>
       </Card>
@@ -40,18 +40,20 @@ export default function HostQuizControl({ gameState, onAction }: HostQuizControl
   if (quiz.phase === 'IDLE') {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Start Quiz</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <Button onClick={() => onAction(() => sendAction('START', { timePerQuestion: 30, totalQuestions: 5 }), 3000)}>
-              Start Quiz (30s)
-            </Button>
-            <Button onClick={() => onAction(() => sendAction('START', { timePerQuestion: 15, totalQuestions: 5 }), 3000)} variant="secondary">
-              Start Blitz (15s)
-            </Button>
-          </div>
+        <CardContent className="py-6 space-y-3">
+          <Button
+            className="w-full min-h-[56px] text-lg font-bold"
+            onClick={() => onAction('start-30', () => sendAction('START', { timePerQuestion: 30, totalQuestions: 5 }), 3000)}
+          >
+            Start Quiz — 30s per question
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full min-h-[48px]"
+            onClick={() => onAction('start-15', () => sendAction('START', { timePerQuestion: 15, totalQuestions: 5 }), 3000)}
+          >
+            Blitz Mode — 15s per question
+          </Button>
         </CardContent>
       </Card>
     );
@@ -59,44 +61,56 @@ export default function HostQuizControl({ gameState, onAction }: HostQuizControl
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Quiz Control: Question {quiz.currentQuestionIndex + 1} / {quiz.config.totalQuestions}</CardTitle>
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-base">
+            Q{quiz.currentQuestionIndex + 1}/{quiz.config.totalQuestions}
+          </CardTitle>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">
+              {answeredCount}/{gameState.teams.length} answered
+            </span>
+            <span className={`text-2xl font-bold tabular-nums ${quiz.timer <= 5 ? 'text-red-500' : ''}`}>
+              {quiz.timer}s
+            </span>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="text-2xl font-bold text-center mb-4">
-          Timer: {quiz.timer}s
-        </div>
-        
-        <div className="grid grid-cols-1 gap-4">
-          {quiz.phase === 'QUESTION' && (
-            <Button onClick={() => onAction(() => sendAction('REVEAL'))} className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
-              Reveal Answer
-            </Button>
-          )}
-          
-          {quiz.phase === 'REVEAL' && (
-            <>
-              {isLastQuestion ? (
-                <Button onClick={() => onAction(() => sendAction('SKIP_TO_END'))} className="w-full bg-green-600 hover:bg-green-700 text-white">
-                  Go to End Screen (Podium)
-                </Button>
-              ) : (
-                <Button onClick={() => onAction(() => sendAction('NEXT'))} className="w-full">
-                  Next Question
-                </Button>
-              )}
-            </>
-          )}
-          
-          <Button onClick={() => onAction(() => sendAction('SKIP_TO_END'))} variant="destructive" className="w-full">
-            End Game Early (Go to Podium)
+      <CardContent className="space-y-3">
+        {/* Primary action — the one thing the host most likely needs to tap */}
+        {quiz.phase === 'QUESTION' && (
+          <Button
+            className="w-full min-h-[64px] text-xl font-bold bg-amber-500 hover:bg-amber-600 text-white"
+            onClick={() => onAction('reveal', () => sendAction('REVEAL'))}
+          >
+            Reveal Answer
           </Button>
-        </div>
+        )}
 
-        <div className="mt-4 p-4 bg-secondary rounded-md">
-          <h3 className="font-semibold mb-2">Current Question:</h3>
-          <p>{quiz.currentQuestion?.text}</p>
-          <p className="text-sm text-muted-foreground mt-1">Correct: {quiz.currentQuestion?.options[quiz.currentQuestion?.correctOptionIndex || 0]}</p>
+        {quiz.phase === 'REVEAL' && (
+          <Button
+            className="w-full min-h-[64px] text-xl font-bold"
+            onClick={() => onAction('next', () => sendAction(isLastQuestion ? 'SKIP_TO_END' : 'NEXT'))}
+          >
+            {isLastQuestion ? 'Show Results' : 'Next Question →'}
+          </Button>
+        )}
+
+        {/* Secondary action */}
+        <Button
+          variant="outline"
+          className="w-full min-h-[48px] text-muted-foreground"
+          onClick={() => onAction('end-early', () => sendAction('SKIP_TO_END'))}
+        >
+          End Quiz Early
+        </Button>
+
+        {/* Current question preview (small, for host reference) */}
+        <div className="p-3 rounded-lg bg-secondary text-sm">
+          <p className="font-medium">{quiz.currentQuestion?.text}</p>
+          <p className="text-muted-foreground mt-1">
+            Answer: {quiz.currentQuestion?.options[quiz.currentQuestion?.correctOptionIndex || 0]}
+          </p>
         </div>
       </CardContent>
     </Card>
