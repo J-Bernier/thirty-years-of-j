@@ -9,6 +9,7 @@ import ReactionOverlay from '@/components/ReactionOverlay';
 import ChatFeed from '@/components/ChatFeed';
 
 import confetti from 'canvas-confetti';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface PlayerReactionState {
   type: string;
@@ -97,6 +98,9 @@ export default function DisplayView() {
 
   // Show media state from ShowRunner
   const showMedia = gameState?.show?.mediaState;
+
+  // Player join URL for QR code
+  const joinUrl = `${window.location.origin}/player`;
 
   return (
     <div
@@ -277,15 +281,30 @@ export default function DisplayView() {
                   30 Years of J
                 </h1>
 
+                {/* QR code + URL */}
+                <div className="flex items-center justify-center gap-8 mt-10">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: '#fff' }}>
+                    <QRCodeSVG value={joinUrl} size={200} level="M" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm uppercase tracking-[3px] mb-2" style={{ color: 'var(--show-text-dim)' }}>
+                      Join the game
+                    </p>
+                    <p className="text-3xl font-bold font-mono" style={{ color: 'var(--show-text)' }}>
+                      {joinUrl.replace(/^https?:\/\//, '')}
+                    </p>
+                  </div>
+                </div>
+
                 {gameState?.teams.length === 0 ? (
                   <p
-                    className="text-2xl mt-8 animate-pulse font-light"
+                    className="text-xl mt-8 animate-pulse font-light"
                     style={{ color: 'var(--show-text-muted)' }}
                   >
-                    Scan the QR code or visit the URL to join...
+                    Waiting for teams to join...
                   </p>
                 ) : (
-                  <div className="mt-12">
+                  <div className="mt-10">
                     <p
                       className="text-lg mb-6 uppercase tracking-[4px]"
                       style={{ color: 'var(--show-text-dim)' }}
