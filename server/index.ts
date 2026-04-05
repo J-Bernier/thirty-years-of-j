@@ -1,8 +1,8 @@
 import express from 'express';
-import {createServer} from 'http';
-import {Server} from 'socket.io';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import cors from 'cors';
-import {ClientToServerEvents, ServerToClientEvents, GameState} from './types';
+import { ClientToServerEvents, ServerToClientEvents, GameState } from './types';
 
 const app = express();
 app.use(cors());
@@ -15,8 +15,8 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   }
 });
 
-import {QuizManager} from './games/quiz';
-import {db} from './firebase';
+import { QuizManager } from './games/quiz';
+import { db } from './firebase';
 
 const GAME_STATE_DOC_ID = 'current_game_state';
 const GAME_STATE_COLLECTION = 'game_states';
@@ -197,6 +197,21 @@ io.on('connection', (socket) => {
       saveGameState(gameState);
       io.emit('gameStateUpdate', gameState);
     }
+  });
+
+  socket.on('adminGetQuestions', async (callback) => {
+    const questions = await quizManager.getQuestions();
+    callback(questions);
+  });
+
+  socket.on('adminAddQuestion', async (question, callback) => {
+    const result = await quizManager.addQuestion(question);
+    callback(result);
+  });
+
+  socket.on('adminDeleteQuestion', async (id, callback) => {
+    const success = await quizManager.deleteQuestion(id);
+    callback(success);
   });
 
   socket.on('disconnect', () => {

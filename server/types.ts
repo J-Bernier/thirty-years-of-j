@@ -86,4 +86,7 @@ export interface ClientToServerEvents {
   sendChatMessage: (text: string) => void;
   adminPlayMedia: (payload: MediaPayload) => void;
   adminUpdateScore: (payload: { teamId: string; delta: number }) => void;
+  adminGetQuestions: (callback: (questions: QuizQuestion[]) => void) => void;
+  adminAddQuestion: (question: Omit<QuizQuestion, 'id'>, callback: (response: { success: boolean; error?: string }) => void) => void;
+  adminDeleteQuestion: (id: string, callback: (success: boolean) => void) => void;
 }

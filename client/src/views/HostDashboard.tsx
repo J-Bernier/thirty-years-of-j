@@ -7,6 +7,8 @@ import type { GameState } from '../types';
 
 import HostQuizControl from '../games/quiz/HostQuizControl';
 
+import GameConfiguration from '@/components/GameConfiguration';
+
 export default function HostDashboard() {
   const { isConnected, socket } = useSocket();
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -41,10 +43,11 @@ export default function HostDashboard() {
       </div>
 
       <Tabs defaultValue="game" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-8">
+        <TabsList className="grid w-full grid-cols-4 mb-8">
           <TabsTrigger value="game">Game Control</TabsTrigger>
           <TabsTrigger value="teams">Teams & Scoreboard</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="config">Configuration</TabsTrigger>
         </TabsList>
 
         <TabsContent value="game">
@@ -248,6 +251,10 @@ export default function HostDashboard() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="config">
+          <GameConfiguration />
         </TabsContent>
       </Tabs>
     </div>

@@ -1,7 +1,10 @@
 import { Server } from 'socket.io';
 import { GameState, QuizQuestion, ServerToClientEvents, ClientToServerEvents } from '../types';
+import { db } from '../firebase';
 
-// Sample questions for testing
+const QUESTIONS_COLLECTION = 'quiz_questions';
+
+// Sample questions for testing/seeding
 const SAMPLE_QUESTIONS: QuizQuestion[] = [
   {
     id: '1',
@@ -28,6 +31,7 @@ export class QuizManager {
   private getGameState: () => GameState;
   private setGameState: (state: GameState) => void;
   private timerInterval: NodeJS.Timeout | null = null;
+  private currentQuestions: QuizQuestion[] = [];
 
   constructor(
     io: Server<ClientToServerEvents, ServerToClientEvents>,
@@ -39,12 +43,59 @@ export class QuizManager {
     this.setGameState = setGameState;
   }
 
-  public handleAdminAction(action: { type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: any }) {
+  public async getQuestions(): Promise<QuizQuestion[]> {
+    try {
+      const snapshot = await db.collection(QUESTIONS_COLLECTION).get();
+      if (snapshot.empty) {
+        // Seed with sample questions if empty
+        console.log('Seeding database with sample questions...');
+        const batch = db.batch();
+        const seededQuestions: QuizQuestion[] = [];
+        
+        for (const q of SAMPLE_QUESTIONS) {
+          const docRef = db.collection(QUESTIONS_COLLECTION).doc();
+          const questionWithId = { ...q, id: docRef.id };
+          batch.set(docRef, questionWithId);
+          seededQuestions.push(questionWithId);
+        }
+        
+        await batch.commit();
+        return seededQuestions;
+      }
+      
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuizQuestion));
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+      return [];
+    }
+  }
+
+  public async addQuestion(question: Omit<QuizQuestion, 'id'>): Promise<{ success: boolean; error?: string }> {
+    try {
+      await db.collection(QUESTIONS_COLLECTION).add(question);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error adding question:', error);
+      return { success: false, error: error.message || 'Unknown error' };
+    }
+  }
+
+  public async deleteQuestion(id: string): Promise<boolean> {
+    try {
+      await db.collection(QUESTIONS_COLLECTION).doc(id).delete();
+      return true;
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      return false;
+    }
+  }
+
+  public async handleAdminAction(action: { type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: any }) {
     const state = this.getGameState();
 
     switch (action.type) {
       case 'SETUP':
-        this.setupQuiz();
+        await this.setupQuiz();
         break;
       case 'START':
         this.startQuiz(action.payload);
@@ -107,13 +158,14 @@ export class QuizManager {
     }
   }
 
-  private setupQuiz() {
+  private async setupQuiz() {
+    const questions = await this.getQuestions();
     const state = this.getGameState();
     state.phase = 'GAME';
     state.activeRound = 'QUIZ';
     state.quiz = {
       isActive: true,
-      config: { timePerQuestion: 30, totalQuestions: SAMPLE_QUESTIONS.length },
+      config: { timePerQuestion: 30, totalQuestions: questions.length },
       currentQuestion: null,
       currentQuestionIndex: -1,
       timer: 0,
@@ -125,16 +177,28 @@ export class QuizManager {
     state.teams.forEach(team => {
       state.quiz.gameScores[team.id] = 0;
     });
+    
+    // Store questions in memory for this session? 
+    // Or fetch them one by one? 
+    // For simplicity, let's store them in the quiz state or a private property.
+    // Since GameState is shared, maybe we shouldn't put all questions there if we want to hide them.
+    // But for now, let's just keep them in a private property of QuizManager?
+    // The issue is QuizManager is instantiated once, but setupQuiz resets it.
+    // Let's add a private property `currentQuestions` to QuizManager.
+    this.currentQuestions = questions;
+
     this.setGameState(state);
     this.io.emit('gameStateUpdate', state);
   }
 
   private startQuiz(config: { timePerQuestion: number, totalQuestions: number }) {
     const state = this.getGameState();
+    const questions = this.currentQuestions || [];
+    
     if (config) {
       state.quiz.config = {
         ...config,
-        totalQuestions: Math.min(config.totalQuestions, SAMPLE_QUESTIONS.length)
+        totalQuestions: Math.min(config.totalQuestions, questions.length)
       };
     }
     // Start the first question immediately
@@ -143,16 +207,17 @@ export class QuizManager {
 
   private nextQuestion() {
     const state = this.getGameState();
+    const questions = this.currentQuestions || [];
     const nextIndex = state.quiz.currentQuestionIndex + 1;
     
-    if (nextIndex >= SAMPLE_QUESTIONS.length) {
+    if (nextIndex >= questions.length || nextIndex >= state.quiz.config.totalQuestions) {
       // End of quiz
       this.cancelQuiz(); // Or separate END phase
       return;
     }
 
     state.quiz.currentQuestionIndex = nextIndex;
-    state.quiz.currentQuestion = SAMPLE_QUESTIONS[nextIndex];
+    state.quiz.currentQuestion = questions[nextIndex];
     state.quiz.phase = 'QUESTION';
     state.quiz.timer = state.quiz.config.timePerQuestion;
     state.quiz.answers = {}; // Reset answers
