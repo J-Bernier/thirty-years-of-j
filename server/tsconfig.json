@@ -3,6 +3,7 @@
     "target": "es2016",
     "module": "commonjs",
     "outDir": "./dist",
+    "rootDir": "..",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -12,5 +13,6 @@
       "@shared/*": ["../shared/*"]
     }
   },
-  "include": [".", "../shared"]
+  "include": ["./**/*.ts", "../shared/**/*.ts"],
+  "exclude": ["__tests__", "dist", "vitest.config.ts"]
 }

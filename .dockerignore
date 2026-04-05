@@ -1,0 +1,8 @@
+node_modules
+client
+server/node_modules
+server/dist
+server/__tests__
+*.md
+.git
+.gstack
