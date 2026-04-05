@@ -2,7 +2,12 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { ClientToServerEvents, ServerToClientEvents, GameState } from './types';
+import { ClientToServerEvents, ServerToClientEvents, GameState, ServerTeam } from './types';
+
+// Server-side game state uses ServerTeam (with socketId) instead of base Team
+interface ServerGameState extends Omit<GameState, 'teams'> {
+  teams: ServerTeam[];
+}
 
 const app = express();
 app.use(cors());
@@ -21,9 +26,9 @@ import { db } from './firebase';
 const GAME_STATE_DOC_ID = 'current_game_state';
 const GAME_STATE_COLLECTION = 'game_states';
 
-let gameState: GameState = {
+let gameState: ServerGameState = {
   phase: 'LOBBY',
-  teams: [],
+  teams: [] as ServerTeam[],
   activeRound: null,
   history: [],
   showLeaderboard: false,
@@ -43,7 +48,7 @@ let gameState: GameState = {
 let saveTimeout: NodeJS.Timeout | null = null;
 let saveEnabled = true;
 
-const saveGameState = (state: GameState) => {
+const saveGameState = (state: ServerGameState) => {
   if (!saveEnabled) return;
   if (saveTimeout) clearTimeout(saveTimeout);
   
@@ -63,7 +68,7 @@ const loadGameState = async () => {
   try {
     const doc = await db.collection(GAME_STATE_COLLECTION).doc(GAME_STATE_DOC_ID).get();
     if (doc.exists) {
-      const data = doc.data() as GameState;
+      const data = doc.data() as ServerGameState;
       // Merge with default state to ensure structure is valid
       gameState = { ...gameState, ...data };
       console.log('Game state loaded from Firestore');
@@ -83,8 +88,9 @@ loadGameState();
 const quizManager = new QuizManager(
   io,
   () => gameState,
-  (newState) => { 
-    gameState = newState;
+  (newState) => {
+    // Safe cast: QuizManager modifies quiz state only, teams array retains ServerTeam objects
+    gameState = newState as ServerGameState;
     saveGameState(gameState);
   }
 );

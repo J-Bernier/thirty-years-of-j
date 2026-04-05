@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
-import { GameState, QuizQuestion, ServerToClientEvents, ClientToServerEvents } from '../types';
+import { QuizQuestion, ServerToClientEvents, ClientToServerEvents } from '../types';
+import type { GameState } from '../../shared/types';
 import { db } from '../firebase';
 
 const QUESTIONS_COLLECTION = 'quiz_questions';

@@ -1,91 +1,10 @@
-export interface Team {
-  id: string; // Persistent Player ID
-  socketId: string; // Current Socket ID
-  name: string;
-  score: number;
-  color: string;
-}
+// Re-export all shared types
+export * from '../shared/types';
 
-export type GamePhase = 'LOBBY' | 'GAME' | 'RESULTS';
+import type { Team } from '../shared/types';
 
-export interface QuizQuestion {
-  id: string;
-  text: string;
-  options: string[];
-  correctOptionIndex: number;
-}
-
-export interface QuizAnswer {
-  optionIndex: number;
-  locked: boolean;
-  timestamp: number; // Server timer value at lock time (higher = faster answer, counts down)
-}
-
-export interface QuizState {
-  isActive: boolean;
-  config: {
-    timePerQuestion: number;
-    totalQuestions: number;
-  };
-  currentQuestion: QuizQuestion | null;
-  currentQuestionIndex: number;
-  timer: number;
-  phase: 'IDLE' | 'QUESTION' | 'REVEAL' | 'END';
-  answers: Record<string, QuizAnswer>; // teamId -> answer
-  gameScores: Record<string, number>; // teamId -> score for this game
-}
-
-export interface GameHistoryEntry {
-  id: string;
-  gameType: string;
-  timestamp: number;
-  scores: { teamId: string; teamName: string; score: number }[];
-}
-
-export interface GameState {
-  phase: GamePhase;
-  teams: Team[];
-  activeRound: string | null;
-  quiz: QuizState;
-  history: GameHistoryEntry[];
-  showLeaderboard: boolean; // Global leaderboard toggle
-}
-
-export interface ChatMessage {
-  id: string;
-  teamId: string;
-  teamName: string;
-  text: string;
-  timestamp: number;
-  teamColor: string;
-}
-
-export interface MediaPayload {
-  type: 'video' | 'audio';
-  url: string;
-  duration?: number;
-}
-
-export interface ServerToClientEvents {
-  gameStateUpdate: (state: GameState) => void;
-  reactionTriggered: (payload: { type: string; teamId: string; teamName: string; teamColor: string }) => void;
-  triggerAnimation: (type: string) => void;
-  chatMessage: (message: ChatMessage) => void;
-  playMedia: (payload: MediaPayload) => void;
-}
-
-export interface ClientToServerEvents {
-  joinTeam: (payload: { name: string; playerId: string }) => void;
-  quizAnswer: (optionIndex: number) => void;
-  quizLock: () => void;
-  quizAdminAction: (action: { type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: any }) => void;
-  playerReaction: (reactionType: string) => void;
-  triggerAnimation: (type: string) => void;
-  toggleLeaderboard: (show: boolean) => void;
-  sendChatMessage: (text: string) => void;
-  adminPlayMedia: (payload: MediaPayload) => void;
-  adminUpdateScore: (payload: { teamId: string; delta: number }) => void;
-  adminGetQuestions: (callback: (questions: QuizQuestion[]) => void) => void;
-  adminAddQuestion: (question: Omit<QuizQuestion, 'id'>, callback: (response: { success: boolean; error?: string }) => void) => void;
-  adminDeleteQuestion: (id: string, callback: (success: boolean) => void) => void;
+// Server-only extension: Team with socketId for routing messages to specific clients.
+// Structurally compatible with Team — can be used anywhere Team is expected.
+export interface ServerTeam extends Team {
+  socketId: string;
 }
