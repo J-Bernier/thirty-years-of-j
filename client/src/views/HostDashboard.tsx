@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { GameState } from '../types';
@@ -182,7 +181,7 @@ export default function HostDashboard() {
             {/* Live answer distribution */}
             {answerDistribution && quiz.currentQuestion && (
               <div className="grid grid-cols-2 gap-2">
-                {quiz.currentQuestion.options.map((opt, i) => {
+                {quiz.currentQuestion.options.map((_opt, i) => {
                   const count = answerDistribution[i];
                   const maxCount = Math.max(...answerDistribution, 1);
                   const percent = (count / maxCount) * 100;
