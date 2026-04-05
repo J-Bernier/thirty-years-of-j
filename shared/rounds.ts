@@ -61,18 +61,3 @@ export interface LeaderboardSegmentConfig extends RoundConfig {
 }
 
 export type SegmentConfig = QuizSegmentConfig | MediaSegmentConfig | LeaderboardSegmentConfig;
-
-// Show definition: the host builds this before or during the show.
-export interface ShowDefinition {
-  segments: SegmentConfig[];
-}
-
-// Show state: broadcast to all clients so Display knows what's happening
-export interface ShowState {
-  isActive: boolean;
-  currentSegmentIndex: number;
-  currentSegment: SegmentConfig | null;
-  currentRoundState: RoundState | null;
-  totalSegments: number;
-  // Don't expose the full segment list to clients (spoils the show)
-}

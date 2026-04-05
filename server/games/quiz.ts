@@ -180,12 +180,14 @@ export class QuizManager {
     const state = this.state;
     const questions = this.currentQuestions || [];
 
-    if (config) {
-      state.quiz.config = {
-        ...config,
-        totalQuestions: Math.min(config.totalQuestions, questions.length)
-      };
-    }
+    const timePerQuestion = typeof config?.timePerQuestion === 'number' && config.timePerQuestion > 0
+      ? config.timePerQuestion
+      : DEFAULT_TIME_PER_QUESTION;
+    const totalQuestions = typeof config?.totalQuestions === 'number' && config.totalQuestions > 0
+      ? Math.min(config.totalQuestions, questions.length)
+      : questions.length;
+
+    state.quiz.config = { timePerQuestion, totalQuestions };
     this.nextQuestion();
   }
 

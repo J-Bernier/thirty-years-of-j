@@ -1,7 +1,7 @@
 import type { Round, RoundAction, SegmentConfig } from '../shared/rounds';
 import type { QuizAdminAction } from '../shared/types';
 import { QuizManager, QuizCallbacks } from './games/quiz';
-import { MediaSegment } from './segments/media';
+import { MediaSegment, MediaRoundState } from './segments/media';
 import type { GameState } from '../shared/types';
 
 export interface ShowRunnerCallbacks {
@@ -17,6 +17,7 @@ export class ShowRunner {
   private currentIndex = -1;
   private activeRound: Round | null = null;
   private tickInterval: NodeJS.Timeout | null = null;
+  private advancing = false;
   private quizManager: QuizManager;
 
   constructor(callbacks: ShowRunnerCallbacks) {
@@ -46,6 +47,10 @@ export class ShowRunner {
 
   /** Start the show or advance to the next segment. */
   async advance(): Promise<void> {
+    if (this.advancing) return;
+    this.advancing = true;
+
+    try {
     // Clean up current segment
     if (this.activeRound) {
       this.activeRound.cleanup();
@@ -76,6 +81,9 @@ export class ShowRunner {
     }
 
     this.callbacks.broadcastState();
+    } finally {
+      this.advancing = false;
+    }
   }
 
   /** Handle an action from host or player, routed to the active round. */
@@ -108,13 +116,13 @@ export class ShowRunner {
   getShowState(): GameState['show'] {
     const config = this.currentIndex >= 0 ? this.segments[this.currentIndex] : null;
     const roundState = this.activeRound?.getState();
-    const mediaState = roundState?.type === 'media' ? (roundState as any) : undefined;
+    const mediaState = roundState?.type === 'media' ? roundState as MediaRoundState : undefined;
 
     return {
       isActive: this.currentIndex >= 0 && this.currentIndex < this.segments.length,
       currentSegmentIndex: this.currentIndex,
       currentSegmentType: config?.type ?? null,
-      currentSegmentTitle: config && 'title' in config ? (config as any).title : undefined,
+      currentSegmentTitle: config && 'title' in config ? (config as { title?: string }).title : undefined,
       totalSegments: this.segments.length,
       mediaState: mediaState ? {
         src: mediaState.src,
