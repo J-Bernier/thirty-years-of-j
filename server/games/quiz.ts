@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import { QuizQuestion, ServerToClientEvents, ClientToServerEvents } from '../types';
 import type { GameState } from '../../shared/types';
+import { DEFAULT_TIME_PER_QUESTION } from '../../shared/constants';
 import { db } from '../firebase';
 
 const QUESTIONS_COLLECTION = 'quiz_questions';
@@ -161,7 +162,7 @@ export class QuizManager {
     state.activeRound = 'QUIZ';
     state.quiz = {
       isActive: true,
-      config: { timePerQuestion: 30, totalQuestions: questions.length },
+      config: { timePerQuestion: DEFAULT_TIME_PER_QUESTION, totalQuestions: questions.length },
       currentQuestion: null,
       currentQuestionIndex: -1,
       timer: 0,

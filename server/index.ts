@@ -3,6 +3,14 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { ClientToServerEvents, ServerToClientEvents, GameState, ServerTeam } from './types';
+import {
+  DISCONNECT_GRACE_PERIOD_MS,
+  FIRESTORE_SAVE_DEBOUNCE_MS,
+  TEAM_COLORS,
+  MAX_TEAM_NAME_LENGTH,
+  MAX_CHAT_MESSAGE_LENGTH,
+  DEFAULT_TIME_PER_QUESTION,
+} from '../shared/constants';
 
 // Server-side game state uses ServerTeam (with socketId) instead of base Team
 interface ServerGameState extends Omit<GameState, 'teams'> {
@@ -34,7 +42,7 @@ let gameState: ServerGameState = {
   showLeaderboard: false,
   quiz: {
     isActive: false,
-    config: { timePerQuestion: 30, totalQuestions: 0 },
+    config: { timePerQuestion: DEFAULT_TIME_PER_QUESTION, totalQuestions: 0 },
     currentQuestion: null,
     currentQuestionIndex: -1,
     timer: 0,
@@ -60,7 +68,7 @@ const saveGameState = (state: ServerGameState) => {
       console.error('Error saving game state (disabling persistence):', error);
       saveEnabled = false; // Disable future saves to prevent log spam/crashes
     }
-  }, 1000); // Save at most once per second
+  }, FIRESTORE_SAVE_DEBOUNCE_MS);
 };
 
 // Load initial state
@@ -107,13 +115,17 @@ io.on('connection', (socket) => {
   socket.emit('gameStateUpdate', gameState);
 
   socket.on('joinTeam', ({ name, playerId }: { name: string, playerId: string }) => {
+    if (!name || !playerId) return;
+    const sanitizedName = name.trim().slice(0, MAX_TEAM_NAME_LENGTH);
+    if (!sanitizedName) return;
+
     // Check if team already exists (reconnection)
     const existingTeam = gameState.teams.find(t => t.id === playerId);
 
     if (existingTeam) {
       // Reconnect
       existingTeam.socketId = socket.id;
-      existingTeam.name = name; // Update name just in case
+      existingTeam.name = sanitizedName;
       
       // Clear any pending disconnect timeout
       if (disconnectTimeouts.has(playerId)) {
@@ -124,12 +136,12 @@ io.on('connection', (socket) => {
       console.log(`Team reconnected: ${name} (${playerId})`);
     } else {
       // New Team
-      const newTeam = {
+      const newTeam: ServerTeam = {
         id: playerId,
         socketId: socket.id,
-        name: name,
+        name: sanitizedName,
         score: 0,
-        color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color
+        color: TEAM_COLORS[gameState.teams.length % TEAM_COLORS.length],
       };
       gameState.teams.push(newTeam);
       console.log(`Team joined: ${name} (${playerId})`);
@@ -180,13 +192,17 @@ io.on('connection', (socket) => {
   });
 
   socket.on('sendChatMessage', (text) => {
+    if (!text || typeof text !== 'string') return;
+    const sanitizedText = text.trim().slice(0, MAX_CHAT_MESSAGE_LENGTH);
+    if (!sanitizedText) return;
+
     const team = gameState.teams.find(t => t.socketId === socket.id);
     if (team) {
       const message = {
         id: Math.random().toString(36).substring(7),
         teamId: team.id,
         teamName: team.name,
-        text,
+        text: sanitizedText,
         timestamp: Date.now(),
         teamColor: team.color
       };
@@ -199,6 +215,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('adminUpdateScore', ({ teamId, delta }) => {
+    if (!teamId || typeof delta !== 'number') return;
     const team = gameState.teams.find(t => t.id === teamId);
     if (team) {
       team.score += delta;
@@ -238,7 +255,7 @@ io.on('connection', (socket) => {
           console.log(`Team removed after timeout: ${removedTeam.name}`);
         }
         disconnectTimeouts.delete(team.id);
-      }, 10000); // 10 seconds grace period
+      }, DISCONNECT_GRACE_PERIOD_MS);
 
       disconnectTimeouts.set(team.id, timeout);
     }
