@@ -93,15 +93,21 @@ const loadGameState = async () => {
 loadGameState();
 
 
-const quizManager = new QuizManager(
-  io,
-  () => gameState,
-  (newState) => {
-    // Safe cast: QuizManager modifies quiz state only, teams array retains ServerTeam objects
+const quizManager = new QuizManager({
+  getGameState: () => gameState,
+  setGameState: (newState) => {
     gameState = newState as ServerGameState;
     saveGameState(gameState);
-  }
-);
+  },
+  broadcastState: (state) => {
+    io.emit('gameStateUpdate', state);
+  },
+  broadcastEvent: (event, payload) => {
+    if (event === 'triggerAnimation') {
+      io.emit('triggerAnimation', payload as string);
+    }
+  },
+});
 
 // Track disconnection timeouts at module scope so all connections share it.
 // If scoped per-connection, a reconnecting player's new socket can't clear
