@@ -51,6 +51,20 @@ export interface GameState {
   quiz: QuizState;
   history: GameHistoryEntry[];
   showLeaderboard: boolean;
+  show?: {
+    isActive: boolean;
+    currentSegmentIndex: number;
+    currentSegmentType: string | null;
+    currentSegmentTitle?: string;
+    totalSegments: number;
+    mediaState?: {
+      src: string;
+      title?: string;
+      elapsed: number;
+      duration?: number;
+      phase: string;
+    };
+  };
 }
 
 export interface ChatMessage {
@@ -95,4 +109,8 @@ export interface ClientToServerEvents {
   adminGetQuestions: (callback: (questions: QuizQuestion[]) => void) => void;
   adminAddQuestion: (question: Omit<QuizQuestion, 'id'>, callback: (response: { success: boolean; error?: string }) => void) => void;
   adminDeleteQuestion: (id: string, callback: (success: boolean) => void) => void;
+  // Show management
+  showLoadAndStart: (segments: import('./rounds').SegmentConfig[]) => void;
+  showAdvance: () => void;
+  showCancel: () => void;
 }

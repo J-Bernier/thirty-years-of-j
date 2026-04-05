@@ -28,7 +28,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   }
 });
 
-import { QuizManager } from './games/quiz';
+import { ShowRunner } from './show-runner';
 import { db } from './firebase';
 
 const GAME_STATE_DOC_ID = 'current_game_state';
@@ -93,21 +93,27 @@ const loadGameState = async () => {
 loadGameState();
 
 
-const quizManager = new QuizManager({
+const broadcastGameState = () => {
+  // Merge show state into gameState before broadcasting
+  gameState.show = showRunner.getShowState();
+  io.emit('gameStateUpdate', gameState);
+};
+
+const showRunner = new ShowRunner({
   getGameState: () => gameState,
   setGameState: (newState) => {
     gameState = newState as ServerGameState;
     saveGameState(gameState);
   },
-  broadcastState: (state) => {
-    io.emit('gameStateUpdate', state);
-  },
+  broadcastState: broadcastGameState,
   broadcastEvent: (event, payload) => {
     if (event === 'triggerAnimation') {
       io.emit('triggerAnimation', payload as string);
     }
   },
 });
+
+const quizManager = showRunner.getQuizManager();
 
 // Track disconnection timeouts at module scope so all connections share it.
 // If scoped per-connection, a reconnecting player's new socket can't clear
@@ -158,20 +164,33 @@ io.on('connection', (socket) => {
   });
 
   socket.on('quizAdminAction', (action) => {
-    quizManager.handleAdminAction(action);
+    if (showRunner.isActive()) {
+      showRunner.handleAction(action);
+    } else {
+      // Standalone quiz flow (backwards compatible)
+      quizManager.handleAdminAction(action);
+    }
   });
 
   socket.on('quizAnswer', (optionIndex) => {
     const team = gameState.teams.find(t => t.socketId === socket.id);
     if (team) {
-      quizManager.handleAnswer(team.id, optionIndex);
+      if (showRunner.isActive()) {
+        showRunner.handlePlayerAnswer(team.id, optionIndex);
+      } else {
+        quizManager.handleAnswer(team.id, optionIndex);
+      }
     }
   });
 
   socket.on('quizLock', () => {
     const team = gameState.teams.find(t => t.socketId === socket.id);
     if (team) {
-      quizManager.handleLock(team.id);
+      if (showRunner.isActive()) {
+        showRunner.handlePlayerLock(team.id);
+      } else {
+        quizManager.handleLock(team.id);
+      }
     }
   });
 
@@ -218,6 +237,20 @@ io.on('connection', (socket) => {
 
   socket.on('adminPlayMedia', (payload) => {
     io.emit('playMedia', payload);
+  });
+
+  // Show management events
+  socket.on('showLoadAndStart', async (segments) => {
+    showRunner.loadShow(segments);
+    await showRunner.advance();
+  });
+
+  socket.on('showAdvance', async () => {
+    await showRunner.advance();
+  });
+
+  socket.on('showCancel', () => {
+    showRunner.cancelShow();
   });
 
   socket.on('adminUpdateScore', ({ teamId, delta }) => {
