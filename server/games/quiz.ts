@@ -74,9 +74,9 @@ export class QuizManager {
     try {
       await db.collection(QUESTIONS_COLLECTION).add(question);
       return { success: true };
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error adding question:', error);
-      return { success: false, error: error.message || 'Unknown error' };
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 
@@ -129,11 +129,8 @@ export class QuizManager {
     };
     
     this.setGameState(state);
-    // We don't broadcast every selection to everyone to avoid cheating/influence, 
-    // but we might want to send a "someone answered" event or just update the host.
-    // For now, full state update is simplest but reveals too much? 
-    // Actually, the client types show everything. We should probably mask answers for players.
-    // But for MVP, let's just broadcast.
+    // TODO: State masking — players currently receive full state including correct answers.
+    // Phase 2 (ShowRunner) will add role-based state filtering per client.
     this.io.emit('gameStateUpdate', state);
   }
 
@@ -143,9 +140,7 @@ export class QuizManager {
     
     if (state.quiz.answers[teamId]) {
       state.quiz.answers[teamId].locked = true;
-      state.quiz.answers[teamId].timestamp = state.quiz.timer; // Record time remaining as score tiebreaker? Or elapsed?
-      // Let's use current timer value (higher is better/faster if counting down? No, lower is better if elapsed. 
-      // But our timer counts down. So higher timer value = faster answer.)
+      state.quiz.answers[teamId].timestamp = state.quiz.timer; // Higher = faster (timer counts down)
       
       this.setGameState(state);
       this.io.emit('gameStateUpdate', state);
@@ -177,14 +172,8 @@ export class QuizManager {
     state.teams.forEach(team => {
       state.quiz.gameScores[team.id] = 0;
     });
-    
-    // Store questions in memory for this session? 
-    // Or fetch them one by one? 
-    // For simplicity, let's store them in the quiz state or a private property.
-    // Since GameState is shared, maybe we shouldn't put all questions there if we want to hide them.
-    // But for now, let's just keep them in a private property of QuizManager?
-    // The issue is QuizManager is instantiated once, but setupQuiz resets it.
-    // Let's add a private property `currentQuestions` to QuizManager.
+
+    // Questions stored in private property, not in GameState (avoid leaking answers to clients)
     this.currentQuestions = questions;
 
     this.setGameState(state);
@@ -211,8 +200,7 @@ export class QuizManager {
     const nextIndex = state.quiz.currentQuestionIndex + 1;
     
     if (nextIndex >= questions.length || nextIndex >= state.quiz.config.totalQuestions) {
-      // End of quiz
-      this.cancelQuiz(); // Or separate END phase
+      this.skipToEnd();
       return;
     }
 

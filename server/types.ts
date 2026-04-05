@@ -18,7 +18,7 @@ export interface QuizQuestion {
 export interface QuizAnswer {
   optionIndex: number;
   locked: boolean;
-  timestamp: number; // Time remaining when answered (or elapsed time)
+  timestamp: number; // Server timer value at lock time (higher = faster answer, counts down)
 }
 
 export interface QuizState {
@@ -76,7 +76,6 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   joinTeam: (payload: { name: string; playerId: string }) => void;
-  adminAction: (action: any) => void;
   quizAnswer: (optionIndex: number) => void;
   quizLock: () => void;
   quizAdminAction: (action: { type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: any }) => void;

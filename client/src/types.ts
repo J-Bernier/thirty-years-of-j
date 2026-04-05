@@ -51,8 +51,7 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  joinTeam: (teamName: string) => void;
-  adminAction: (action: any) => void;
+  joinTeam: (payload: { name: string; playerId: string }) => void;
   quizAnswer: (optionIndex: number) => void;
   quizLock: () => void;
   quizAdminAction: (action: { type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END', payload?: any }) => void;

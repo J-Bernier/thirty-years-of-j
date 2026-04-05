@@ -89,14 +89,16 @@ const quizManager = new QuizManager(
   }
 );
 
+// Track disconnection timeouts at module scope so all connections share it.
+// If scoped per-connection, a reconnecting player's new socket can't clear
+// the old socket's timeout, causing the team to be removed despite reconnecting.
+const disconnectTimeouts = new Map<string, NodeJS.Timeout>();
+
 io.on('connection', (socket) => {
   console.log('a user connected', socket.id);
-  
+
   // Send initial state
   socket.emit('gameStateUpdate', gameState);
-
-  // Map to track disconnection timeouts
-  const disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 
   socket.on('joinTeam', ({ name, playerId }: { name: string, playerId: string }) => {
     // Check if team already exists (reconnection)
