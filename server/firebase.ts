@@ -7,10 +7,17 @@ import * as admin from 'firebase-admin';
 
 if (!admin.apps.length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault()
-    });
-    console.log('Firebase Admin initialized with Application Default Credentials');
+    if (process.env.FIRESTORE_EMULATOR_HOST) {
+      admin.initializeApp({
+        projectId: process.env.GCLOUD_PROJECT || 'years-of-j'
+      });
+      console.log('Firebase Admin initialized in Emulator Mode');
+    } else {
+      admin.initializeApp({
+        credential: admin.credential.applicationDefault()
+      });
+      console.log('Firebase Admin initialized with Application Default Credentials');
+    }
   } catch (error) {
     console.error('Failed to initialize Firebase Admin:', error);
   }

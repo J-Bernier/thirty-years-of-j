@@ -1,5 +1,5 @@
-import {initializeApp} from "firebase/app";
-import {getAuth, GoogleAuthProvider} from "firebase/auth";
+import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 // Your web app's Firebase configuration
 // For now, we'll use placeholders. You MUST replace these with your actual config.
@@ -16,3 +16,15 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+if (import.meta.env.VITE_USE_EMULATORS === 'true') {
+  // Connect to emulators
+  // Note: We don't export db here yet, but if we did, we'd connect it too.
+  // import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+  // const db = getFirestore(app);
+  // connectFirestoreEmulator(db, 'localhost', 8080);
+  
+  const { connectAuthEmulator } = await import("firebase/auth");
+  connectAuthEmulator(auth, "http://localhost:9099");
+  console.log("Connected to Firebase Auth Emulator");
+}

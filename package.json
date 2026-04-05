@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev:local": "concurrently \"npm run emulators --prefix client\" \"FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 GCLOUD_PROJECT=years-of-j npm run dev --prefix server\" \"VITE_USE_EMULATORS=true npm run dev --prefix client\"",
     "install:all": "npm install && npm install --prefix server && npm install --prefix client"
   },
   "keywords": [],
