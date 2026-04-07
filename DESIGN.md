@@ -119,3 +119,47 @@ Font: System font stack (no web fonts needed for a one-time event).
 | Commercial break | TV static / jingle | On transition |
 
 All sounds pre-loaded on Display view initialization. Requires user click to satisfy browser autoplay policy (handled by "Start Show" button in lobby).
+
+## Host Dashboard (Tablet)
+
+Mode-driven command center optimized for tablet use during a live show.
+
+### Modes
+
+| Mode | Entry | Exit |
+|------|-------|------|
+| Picker | Default / after show ends | Select a show |
+| Prep | Select a show | GO LIVE or back to picker |
+| Lobby | After GO LIVE | First segment starts (auto-transition to Live) |
+| Live | First segment starts | Show completes (auto-transition to Postshow) |
+| Postshow | Show completes | End Show (back to Picker) |
+
+### Layout (Live Mode)
+
+3-panel at 1024px+: Left 25% (status) | Center 50% (actions) | Right 25% (context). Fixed FX bar at bottom (64px). Below 1024px: collapsed status bar + full-width center actions + FX bar.
+
+### Typography Tokens
+
+| Element | Size | Weight | Extra |
+|---------|------|--------|-------|
+| Panel header | 14px | 600 (Semibold) | Uppercase, tracking-wider, text-gray-500 |
+| Primary value (timer) | text-5xl | 900 (Black) | Tabular nums, monospace |
+| Phase label | text-2xl | 700 (Bold) | |
+| Secondary info | text-base | 400 (Normal) | text-gray-200 |
+| Tertiary info | text-sm | 400 (Normal) | text-gray-500 |
+
+### Spacing & Component Tokens
+
+| Token | Value |
+|-------|-------|
+| Panel padding | `p-4` |
+| Panel divider | `border-r border-white/5` |
+| Primary button | `h-14`, full width, `bg-[#e94560]` |
+| Secondary button | `h-11`, `bg-white/10` |
+| FX bar height | `h-16` |
+| FX bar background | `bg-[#1a1a2e]`, `border-t border-white/5` |
+| FX button | `w-12 h-12 rounded-lg` |
+
+### Go Live Transition
+
+Full-screen overlay with `#e94560` background, "GOING LIVE" in white text-5xl font-black, 1.5s total duration (300ms fade in, hold, 300ms fade out).

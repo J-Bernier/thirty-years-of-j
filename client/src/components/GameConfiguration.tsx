@@ -7,35 +7,58 @@ import { Label } from '@/components/ui/label';
 import type { QuizQuestion } from '../types';
 import { Trash2, Plus } from 'lucide-react';
 
-export default function GameConfiguration() {
+interface GameConfigurationProps {
+  showId?: string;
+  onCountChange?: (count: number) => void;
+}
+
+export default function GameConfiguration({ showId, onCountChange }: GameConfigurationProps) {
   const { socket } = useSocket();
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // New question form state
   const [newQuestionText, setNewQuestionText] = useState('');
   const [options, setOptions] = useState(['', '', '', '']);
   const [correctOptionIndex, setCorrectOptionIndex] = useState(0);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const fetchQuestions = () => {
     if (!socket) return;
     setIsLoading(true);
-    socket.emit('adminGetQuestions', (fetchedQuestions: QuizQuestion[]) => {
-      setQuestions(fetchedQuestions);
-      setIsLoading(false);
-    });
+    if (showId) {
+      socket.emit('adminGetShowQuestions', showId, (fetchedQuestions: QuizQuestion[]) => {
+        setQuestions(fetchedQuestions);
+        onCountChange?.(fetchedQuestions.length);
+        setIsLoading(false);
+      });
+    } else {
+      socket.emit('adminGetQuestions', (fetchedQuestions: QuizQuestion[]) => {
+        setQuestions(fetchedQuestions);
+        onCountChange?.(fetchedQuestions.length);
+        setIsLoading(false);
+      });
+    }
   };
 
   useEffect(() => {
     fetchQuestions();
-  }, [socket]);
+  }, [socket, showId]);
 
   const handleAddQuestion = () => {
     if (!socket) return;
-    
-    // Validate
-    if (!newQuestionText.trim()) return;
-    if (options.some(opt => !opt.trim())) return;
+    setFormError(null);
+
+    // Validate with feedback
+    if (!newQuestionText.trim()) {
+      setFormError('Enter a question');
+      return;
+    }
+    const emptyOptions = options.map((opt, i) => !opt.trim() ? i + 1 : null).filter(Boolean);
+    if (emptyOptions.length > 0) {
+      setFormError(`Fill in option${emptyOptions.length > 1 ? 's' : ''} ${emptyOptions.join(', ')}`);
+      return;
+    }
 
     const newQuestion = {
       text: newQuestionText,
@@ -43,31 +66,40 @@ export default function GameConfiguration() {
       correctOptionIndex: correctOptionIndex
     };
 
-    socket.emit('adminAddQuestion', newQuestion, (response: { success: boolean; error?: string }) => {
+    const onResponse = (response: { success: boolean; error?: string }) => {
       if (response.success) {
-        // Reset form
         setNewQuestionText('');
         setOptions(['', '', '', '']);
         setCorrectOptionIndex(0);
-        // Refresh list
+        setFormError(null);
         fetchQuestions();
       } else {
         alert(`Failed to add question: ${response.error}`);
       }
-    });
+    };
+
+    if (showId) {
+      socket.emit('adminAddShowQuestion', showId, newQuestion, onResponse);
+    } else {
+      socket.emit('adminAddQuestion', newQuestion, onResponse);
+    }
   };
 
   const handleDeleteQuestion = (id: string) => {
     if (!socket) return;
     if (!confirm('Are you sure you want to delete this question?')) return;
 
-    socket.emit('adminDeleteQuestion', id, (success: boolean) => {
-      if (success) {
-        fetchQuestions();
-      } else {
-        alert('Failed to delete question');
-      }
-    });
+    if (showId) {
+      socket.emit('adminDeleteShowQuestion', showId, id, (success: boolean) => {
+        if (success) fetchQuestions();
+        else alert('Failed to delete question');
+      });
+    } else {
+      socket.emit('adminDeleteQuestion', id, (success: boolean) => {
+        if (success) fetchQuestions();
+        else alert('Failed to delete question');
+      });
+    }
   };
 
   const updateOption = (index: number, value: string) => {
@@ -117,6 +149,9 @@ export default function GameConfiguration() {
             <p className="text-xs text-muted-foreground">Select the radio button next to the correct answer.</p>
           </div>
 
+          {formError && (
+            <p className="text-sm text-red-500 font-medium">{formError}</p>
+          )}
           <Button onClick={handleAddQuestion} className="w-full">
             <Plus className="w-4 h-4 mr-2" /> Add Question
           </Button>

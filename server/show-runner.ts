@@ -2,6 +2,7 @@ import type { Round, RoundAction, SegmentConfig } from '../shared/rounds';
 import type { QuizAdminAction } from '../shared/types';
 import { QuizManager, QuizCallbacks } from './games/quiz';
 import { MediaSegment, MediaRoundState } from './segments/media';
+import { LeaderboardRound } from './segments/leaderboard';
 import type { GameState } from '../shared/types';
 
 export interface ShowRunnerCallbacks {
@@ -13,12 +14,13 @@ export interface ShowRunnerCallbacks {
 
 export class ShowRunner {
   private callbacks: ShowRunnerCallbacks;
-  private segments: SegmentConfig[] = [];
-  private currentIndex = -1;
   private activeRound: Round | null = null;
+  private currentConfig: SegmentConfig | null = null;
   private tickInterval: NodeJS.Timeout | null = null;
   private advancing = false;
   private quizManager: QuizManager;
+  private showId: string | null = null;
+  private completedAt: number | undefined;
 
   constructor(callbacks: ShowRunnerCallbacks) {
     this.callbacks = callbacks;
@@ -38,52 +40,55 @@ export class ShowRunner {
     return this.quizManager;
   }
 
-  /** Load a show definition. Call before start(). */
-  loadShow(segments: SegmentConfig[]): void {
-    this.segments = segments;
-    this.currentIndex = -1;
-    this.activeRound = null;
+  /** Set the show instance ID (called when going live, null to clear). */
+  setShowId(showId: string | null): void {
+    this.showId = showId;
+    this.quizManager.setShowId(showId);
   }
 
-  /** Start the show or advance to the next segment. */
-  async advance(): Promise<void> {
+  /** Get the current show instance ID. */
+  getShowId(): string | null {
+    return this.showId;
+  }
+
+  /** Execute a segment on demand. If one is already running, cleanup first. */
+  async executeSegment(config: SegmentConfig): Promise<void> {
     if (this.advancing) return;
     this.advancing = true;
 
     try {
-    // Clean up current segment
+      // Clean up current segment if one is running
+      if (this.activeRound) {
+        this.activeRound.cleanup();
+        this.activeRound = null;
+      }
+      this.stopTick();
+
+      this.currentConfig = config;
+      this.completedAt = undefined;
+      this.activeRound = this.createRound(config);
+
+      if (this.activeRound) {
+        await this.activeRound.setup(config);
+        this.startTick();
+      }
+
+      this.callbacks.broadcastState();
+    } finally {
+      this.advancing = false;
+    }
+  }
+
+  /** Finish the current segment without starting a new one. Host decides what's next. */
+  finishCurrentSegment(): void {
     if (this.activeRound) {
       this.activeRound.cleanup();
       this.activeRound = null;
     }
     this.stopTick();
-
-    this.currentIndex++;
-
-    if (this.currentIndex >= this.segments.length) {
-      // Show is over
-      this.endShow();
-      return;
-    }
-
-    const segmentConfig = this.segments[this.currentIndex];
-    this.activeRound = this.createRound(segmentConfig);
-
-    if (this.activeRound) {
-      await this.activeRound.setup(segmentConfig);
-
-      // For quiz segments, auto-start after setup
-      if (segmentConfig.type === 'quiz') {
-        // Quiz setup puts state in IDLE. The host will send START action.
-      }
-
-      this.startTick();
-    }
-
+    this.currentConfig = null;
+    this.completedAt = undefined;
     this.callbacks.broadcastState();
-    } finally {
-      this.advancing = false;
-    }
   }
 
   /** Handle an action from host or player, routed to the active round. */
@@ -91,7 +96,7 @@ export class ShowRunner {
     if (!this.activeRound) return;
 
     // For quiz segments, delegate to QuizManager's richer action handling
-    if (this.segments[this.currentIndex]?.type === 'quiz') {
+    if (this.currentConfig?.type === 'quiz') {
       this.quizManager.handleAdminAction(action as QuizAdminAction);
     } else {
       this.activeRound.handleAction(action);
@@ -101,29 +106,32 @@ export class ShowRunner {
 
   /** Handle player-specific actions (answer, lock) for quiz segments. */
   handlePlayerAnswer(teamId: string, optionIndex: number): void {
-    if (this.segments[this.currentIndex]?.type === 'quiz') {
+    // LEGACY: standalone quiz flow
+    if (this.currentConfig?.type === 'quiz') {
       this.quizManager.handleAnswer(teamId, optionIndex);
     }
   }
 
   handlePlayerLock(teamId: string): void {
-    if (this.segments[this.currentIndex]?.type === 'quiz') {
+    // LEGACY: standalone quiz flow
+    if (this.currentConfig?.type === 'quiz') {
       this.quizManager.handleLock(teamId);
     }
   }
 
   /** Get the current show state for broadcasting to clients. */
   getShowState(): GameState['show'] {
-    const config = this.currentIndex >= 0 ? this.segments[this.currentIndex] : null;
+    const config = this.currentConfig;
     const roundState = this.activeRound?.getState();
     const mediaState = roundState?.type === 'media' ? roundState as MediaRoundState : undefined;
 
     return {
-      isActive: this.currentIndex >= 0 && this.currentIndex < this.segments.length,
-      currentSegmentIndex: this.currentIndex,
+      instanceId: this.showId ?? '',
+      instanceName: '', // filled by server/index.ts before broadcast
+      isLive: this.showId !== null,
       currentSegmentType: config?.type ?? null,
       currentSegmentTitle: config && 'title' in config ? (config as { title?: string }).title : undefined,
-      totalSegments: this.segments.length,
+      completedAt: this.completedAt,
       mediaState: mediaState ? {
         src: mediaState.src,
         title: mediaState.title,
@@ -141,7 +149,9 @@ export class ShowRunner {
       this.activeRound = null;
     }
     this.stopTick();
-    this.currentIndex = -1;
+    this.currentConfig = null;
+    this.completedAt = undefined;
+    this.showId = null;
 
     const state = this.callbacks.getGameState();
     state.phase = 'LOBBY';
@@ -151,30 +161,8 @@ export class ShowRunner {
     this.callbacks.broadcastState();
   }
 
-  /** Insert a segment after the current one (for live deviation). */
-  insertSegment(segment: SegmentConfig): void {
-    if (!this.isActive()) return;
-    this.segments.splice(this.currentIndex + 1, 0, segment);
-    this.callbacks.broadcastState();
-  }
-
-  /** Get the remaining segment configs (for host preview). */
-  getRemainingSegments(): SegmentConfig[] {
-    if (this.currentIndex < 0) return this.segments;
-    return this.segments.slice(this.currentIndex + 1);
-  }
-
   isActive(): boolean {
-    return this.currentIndex >= 0 && this.currentIndex < this.segments.length;
-  }
-
-  private endShow(): void {
-    this.stopTick();
-    const state = this.callbacks.getGameState();
-    state.phase = 'RESULTS';
-    state.activeRound = null;
-    this.callbacks.setGameState(state);
-    this.callbacks.broadcastState();
+    return this.activeRound !== null;
   }
 
   private createRound(config: SegmentConfig): Round | null {
@@ -186,9 +174,10 @@ export class ShowRunner {
       case 'media':
         return new MediaSegment();
       case 'leaderboard':
-        // Leaderboard is a display-only segment with optional auto-advance.
-        // For now, use MediaSegment as a timer-only placeholder.
-        return new MediaSegment();
+        return new LeaderboardRound({
+          getGameState: this.callbacks.getGameState,
+          setGameState: this.callbacks.setGameState,
+        });
       default:
         return null;
     }
@@ -229,15 +218,21 @@ export class ShowRunner {
 
   private startTick(): void {
     this.stopTick();
+    let wasComplete = false;
+
     this.tickInterval = setInterval(() => {
       if (!this.activeRound) return;
 
       this.activeRound.tick();
 
-      if (this.activeRound.isComplete()) {
-        // Auto-advance when segment completes
-        this.advance();
-      } else if (this.segments[this.currentIndex]?.type !== 'quiz') {
+      if (!wasComplete && this.activeRound.isComplete()) {
+        // Segment just completed — record timestamp, broadcast, stop tick.
+        // Do NOT auto-advance. The host decides what's next.
+        wasComplete = true;
+        this.completedAt = Date.now();
+        this.callbacks.broadcastState();
+        this.stopTick();
+      } else if (this.currentConfig?.type !== 'quiz') {
         // Non-quiz segments need state broadcast on tick (quiz does its own)
         this.callbacks.broadcastState();
       }

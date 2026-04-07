@@ -94,8 +94,17 @@ loadGameState();
 
 
 const broadcastGameState = () => {
-  // Merge show state into gameState before broadcasting
-  gameState.show = showRunner.getShowState();
+  const showState = showRunner.getShowState();
+  if (showState && gameState.show) {
+    // Merge ShowRunner's segment state with server's show instance info
+    gameState.show = {
+      ...gameState.show,
+      currentSegmentType: showState.currentSegmentType,
+      currentSegmentTitle: showState.currentSegmentTitle,
+      completedAt: showState.completedAt,
+      mediaState: showState.mediaState,
+    };
+  }
   io.emit('gameStateUpdate', gameState);
 };
 
@@ -123,8 +132,7 @@ const disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 io.on('connection', (socket) => {
   console.log('a user connected', socket.id);
 
-  // Send initial state (merge show state so reconnecting clients see current segment)
-  gameState.show = showRunner.getShowState();
+  // Send initial state
   socket.emit('gameStateUpdate', gameState);
 
   socket.on('joinTeam', ({ name, playerId }: { name: string, playerId: string }) => {
@@ -168,7 +176,7 @@ io.on('connection', (socket) => {
     if (showRunner.isActive()) {
       showRunner.handleAction(action);
     } else {
-      // Standalone quiz flow (backwards compatible)
+      // LEGACY: standalone quiz flow (dev convenience, remove post-ship)
       quizManager.handleAdminAction(action);
     }
   });
@@ -240,22 +248,53 @@ io.on('connection', (socket) => {
     io.emit('playMedia', payload);
   });
 
-  // Show management events
-  socket.on('showLoadAndStart', async (segments) => {
-    showRunner.loadShow(segments);
-    await showRunner.advance();
+  // Show lifecycle events
+  socket.on('showGoLive', async (showId, callback) => {
+    try {
+      const showDoc = await db.collection('shows').doc(showId).get();
+      if (!showDoc.exists) {
+        callback({ success: false, error: 'Show not found' });
+        return;
+      }
+      const showData = showDoc.data()!;
+      showRunner.setShowId(showId);
+      gameState.show = {
+        instanceId: showId,
+        instanceName: showData.name,
+        isLive: true,
+        currentSegmentType: null,
+      };
+      saveGameState(gameState);
+      broadcastGameState();
+      callback({ success: true });
+    } catch (error) {
+      console.error('Error going live:', error);
+      callback({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
   });
 
-  socket.on('showAdvance', async () => {
-    await showRunner.advance();
+  socket.on('showExecuteSegment', async (config) => {
+    await showRunner.executeSegment(config);
+  });
+
+  socket.on('showFinishSegment', () => {
+    showRunner.finishCurrentSegment();
+  });
+
+  socket.on('showEndShow', () => {
+    showRunner.setShowId(null);
+    gameState.phase = 'LOBBY';
+    gameState.activeRound = null;
+    gameState.quiz.isActive = false;
+    gameState.quiz.phase = 'IDLE';
+    gameState.show = undefined;
+    gameState.showLeaderboard = false;
+    saveGameState(gameState);
+    broadcastGameState();
   });
 
   socket.on('showCancel', () => {
     showRunner.cancelShow();
-  });
-
-  socket.on('showInsertSegment', (segment) => {
-    showRunner.insertSegment(segment);
   });
 
   // Show definition CRUD
@@ -274,18 +313,14 @@ io.on('connection', (socket) => {
     try {
       const now = Date.now();
       if (show.id) {
-        // Update existing
         await db.collection('shows').doc(show.id).set({
           name: show.name,
-          segments: show.segments,
           updatedAt: now,
         }, { merge: true });
         callback({ success: true, id: show.id });
       } else {
-        // Create new
         const doc = await db.collection('shows').add({
           name: show.name,
-          segments: show.segments,
           createdAt: now,
           updatedAt: now,
         });
@@ -303,6 +338,70 @@ io.on('connection', (socket) => {
       callback(true);
     } catch (error) {
       console.error('Error deleting show:', error);
+      callback(false);
+    }
+  });
+
+  // Per-show question CRUD
+  socket.on('adminGetShowQuestions', async (showId, callback) => {
+    try {
+      const snapshot = await db.collection('shows').doc(showId).collection('questions').get();
+      const questions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(questions as any);
+    } catch (error) {
+      console.error('Error fetching show questions:', error);
+      callback([]);
+    }
+  });
+
+  socket.on('adminAddShowQuestion', async (showId, question, callback) => {
+    try {
+      const doc = await db.collection('shows').doc(showId).collection('questions').add(question);
+      callback({ success: true });
+    } catch (error) {
+      console.error('Error adding show question:', error);
+      callback({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  socket.on('adminDeleteShowQuestion', async (showId, questionId, callback) => {
+    try {
+      await db.collection('shows').doc(showId).collection('questions').doc(questionId).delete();
+      callback(true);
+    } catch (error) {
+      console.error('Error deleting show question:', error);
+      callback(false);
+    }
+  });
+
+  // Per-show media CRUD
+  socket.on('adminGetShowMedia', async (showId, callback) => {
+    try {
+      const snapshot = await db.collection('shows').doc(showId).collection('media').get();
+      const media = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(media as any);
+    } catch (error) {
+      console.error('Error fetching show media:', error);
+      callback([]);
+    }
+  });
+
+  socket.on('adminAddShowMedia', async (showId, media, callback) => {
+    try {
+      await db.collection('shows').doc(showId).collection('media').add(media);
+      callback({ success: true });
+    } catch (error) {
+      console.error('Error adding show media:', error);
+      callback({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  socket.on('adminDeleteShowMedia', async (showId, mediaId, callback) => {
+    try {
+      await db.collection('shows').doc(showId).collection('media').doc(mediaId).delete();
+      callback(true);
+    } catch (error) {
+      console.error('Error deleting show media:', error);
       callback(false);
     }
   });

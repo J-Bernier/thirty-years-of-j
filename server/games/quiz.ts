@@ -38,9 +38,14 @@ export class QuizManager {
   private callbacks: QuizCallbacks;
   private timerInterval: NodeJS.Timeout | null = null;
   private currentQuestions: QuizQuestion[] = [];
+  private showId: string | null = null;
 
   constructor(callbacks: QuizCallbacks) {
     this.callbacks = callbacks;
+  }
+
+  setShowId(id: string | null): void {
+    this.showId = id;
   }
 
   private get state(): GameState {
@@ -52,8 +57,20 @@ export class QuizManager {
     this.callbacks.broadcastState(state);
   }
 
-  public async getQuestions(): Promise<QuizQuestion[]> {
+  public async getQuestions(showId?: string): Promise<QuizQuestion[]> {
     try {
+      if (showId) {
+        const snapshot = await db.collection('shows').doc(showId).collection('questions').get();
+        if (snapshot.empty) {
+          return []; // No fallback seeding for per-show questions
+        }
+        return snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as QuizQuestion[];
+      }
+
+      // Global questions (legacy)
       const snapshot = await db.collection(QUESTIONS_COLLECTION).get();
       if (snapshot.empty) {
         console.log('Seeding database with sample questions...');
@@ -154,8 +171,16 @@ export class QuizManager {
   }
 
   private async setupQuiz() {
-    const questions = await this.getQuestions();
+    const questions = await this.getQuestions(this.showId ?? undefined);
     const state = this.state;
+
+    if (questions.length === 0) {
+      console.error('No questions available — cannot start quiz');
+      state.quiz.phase = 'IDLE';
+      this.commitState(state);
+      return;
+    }
+
     state.phase = 'GAME';
     state.activeRound = 'QUIZ';
     state.quiz = {

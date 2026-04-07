@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ShowRunner, ShowRunnerCallbacks } from '../show-runner';
 import { MediaSegment } from '../segments/media';
+import { LeaderboardRound } from '../segments/leaderboard';
 import type { GameState } from '../../shared/types';
 import type { SegmentConfig } from '../../shared/rounds';
 import { DEFAULT_TIME_PER_QUESTION } from '../../shared/constants';
@@ -118,41 +119,38 @@ describe('MediaSegment (unit)', () => {
 });
 
 describe('ShowRunner', () => {
-  describe('Segment sequencing', () => {
-    it('advances through segments', async () => {
+  describe('Segment execution', () => {
+    it('executeSegment starts a media segment', async () => {
       const { runner } = createShowRunner();
-      runner.loadShow([
-        { type: 'media', src: '/v1.mp4', duration: 5, autoAdvance: false },
-        { type: 'media', src: '/v2.mp4', duration: 5, autoAdvance: false },
-      ]);
+      await runner.executeSegment({ type: 'media', src: '/v1.mp4', duration: 5, autoAdvance: false });
 
-      await runner.advance();
-      expect(runner.getShowState()?.currentSegmentIndex).toBe(0);
+      expect(runner.isActive()).toBe(true);
       expect(runner.getShowState()?.currentSegmentType).toBe('media');
-
-      await runner.advance();
-      expect(runner.getShowState()?.currentSegmentIndex).toBe(1);
     });
 
-    it('ends show after last segment', async () => {
-      const { runner, getState } = createShowRunner();
-      runner.loadShow([
-        { type: 'media', src: '/v.mp4', duration: 5, autoAdvance: false },
-      ]);
+    it('executeSegment replaces a running segment', async () => {
+      const { runner } = createShowRunner();
+      await runner.executeSegment({ type: 'media', src: '/v1.mp4', duration: 5, autoAdvance: false });
+      await runner.executeSegment({ type: 'media', src: '/v2.mp4', duration: 5, autoAdvance: false });
 
-      await runner.advance(); // segment 0
-      await runner.advance(); // past end
+      expect(runner.isActive()).toBe(true);
+      expect(runner.getShowState()?.mediaState?.src).toBe('/v2.mp4');
+    });
 
+    it('finishCurrentSegment clears active round', async () => {
+      const { runner } = createShowRunner();
+      await runner.executeSegment({ type: 'media', src: '/v.mp4', duration: 5, autoAdvance: false });
+      expect(runner.isActive()).toBe(true);
+
+      runner.finishCurrentSegment();
       expect(runner.isActive()).toBe(false);
-      expect(getState().phase).toBe('RESULTS');
     });
   });
 
   describe('Cancel', () => {
     it('cancelShow resets to LOBBY', async () => {
       const { runner, getState } = createShowRunner();
-      runner.loadShow([{ type: 'media', src: '/v.mp4', duration: 10, autoAdvance: false }]);
-      await runner.advance();
+      await runner.executeSegment({ type: 'media', src: '/v.mp4', duration: 10, autoAdvance: false });
 
       runner.cancelShow();
 
@@ -162,27 +160,23 @@ describe('ShowRunner', () => {
   });
 
   describe('Re-entrancy guard', () => {
-    it('advance() rejects concurrent calls', async () => {
+    it('executeSegment() rejects concurrent calls', async () => {
       const { runner } = createShowRunner();
-      runner.loadShow([
-        { type: 'media', src: '/v1.mp4', duration: 5, autoAdvance: false },
-        { type: 'media', src: '/v2.mp4', duration: 5, autoAdvance: false },
-      ]);
 
-      const p1 = runner.advance();
-      const p2 = runner.advance(); // should no-op
+      const p1 = runner.executeSegment({ type: 'media', src: '/v1.mp4', duration: 5, autoAdvance: false });
+      const p2 = runner.executeSegment({ type: 'media', src: '/v2.mp4', duration: 5, autoAdvance: false }); // should no-op
 
       await Promise.all([p1, p2]);
 
-      expect(runner.getShowState()?.currentSegmentIndex).toBe(0);
+      // First call wins, second is skipped due to advancing guard
+      expect(runner.getShowState()?.mediaState?.src).toBe('/v1.mp4');
     });
   });
 
   describe('Media segment via ShowRunner', () => {
     it('getShowState includes mediaState', async () => {
       const { runner } = createShowRunner();
-      runner.loadShow([{ type: 'media', src: '/video.mp4', title: 'Commercial', duration: 5, autoAdvance: true }]);
-      await runner.advance();
+      await runner.executeSegment({ type: 'media', src: '/video.mp4', title: 'Commercial', duration: 5, autoAdvance: true });
 
       const showState = runner.getShowState();
       expect(showState?.mediaState).toBeDefined();
@@ -193,16 +187,11 @@ describe('ShowRunner', () => {
 
     it('handleAction SKIP marks segment complete', async () => {
       const { runner } = createShowRunner();
-      runner.loadShow([
-        { type: 'media', src: '/v.mp4', duration: 30, autoAdvance: false },
-        { type: 'media', src: '/v2.mp4', duration: 5, autoAdvance: false },
-      ]);
-      await runner.advance();
+      await runner.executeSegment({ type: 'media', src: '/v.mp4', duration: 30, autoAdvance: false });
 
       runner.handleAction({ type: 'SKIP' });
 
-      // The segment is marked complete, next tick in the interval would advance.
-      // But we can also manually advance.
+      // The segment is marked complete — host decides what's next
       expect(runner.getShowState()?.mediaState?.phase).toBe('DONE');
     });
   });
@@ -210,8 +199,7 @@ describe('ShowRunner', () => {
   describe('Quiz segment via ShowRunner', () => {
     it('loads quiz segment and delegates to QuizManager', async () => {
       const { runner, getState } = createShowRunner();
-      runner.loadShow([{ type: 'quiz', timePerQuestion: 15, totalQuestions: 2 }]);
-      await runner.advance();
+      await runner.executeSegment({ type: 'quiz', timePerQuestion: 15, totalQuestions: 2 });
 
       expect(getState().quiz.isActive).toBe(true);
       expect(getState().quiz.phase).toBe('IDLE');
@@ -219,8 +207,7 @@ describe('ShowRunner', () => {
 
     it('player actions route to QuizManager', async () => {
       const { runner, getState } = createShowRunner();
-      runner.loadShow([{ type: 'quiz', timePerQuestion: 30, totalQuestions: 2 }]);
-      await runner.advance();
+      await runner.executeSegment({ type: 'quiz', timePerQuestion: 30, totalQuestions: 2 });
 
       // Start the quiz via action
       runner.handleAction({ type: 'START', payload: { timePerQuestion: 30, totalQuestions: 2 } });
@@ -234,5 +221,164 @@ describe('ShowRunner', () => {
       runner.handlePlayerLock('team1');
       expect(getState().quiz.answers['team1'].locked).toBe(true);
     });
+  });
+
+  describe('Show ID management', () => {
+    it('setShowId/getShowId track show instance', () => {
+      const { runner } = createShowRunner();
+      expect(runner.getShowId()).toBeNull();
+
+      runner.setShowId('show-123');
+      expect(runner.getShowId()).toBe('show-123');
+      expect(runner.getShowState()?.isLive).toBe(true);
+    });
+
+    it('cancelShow clears showId', async () => {
+      const { runner } = createShowRunner();
+      runner.setShowId('show-123');
+      await runner.executeSegment({ type: 'media', src: '/v.mp4', duration: 5, autoAdvance: false });
+
+      runner.cancelShow();
+
+      expect(runner.getShowId()).toBeNull();
+      expect(runner.getShowState()?.isLive).toBe(false);
+    });
+  });
+
+  describe('Completion signal', () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('sets completedAt when segment completes via tick', async () => {
+      const { runner } = createShowRunner();
+      await runner.executeSegment({ type: 'media', src: '/v.mp4', duration: 2, autoAdvance: true });
+
+      vi.advanceTimersByTime(3000); // 3 ticks — enough to complete
+
+      const showState = runner.getShowState();
+      expect(showState?.completedAt).toBeDefined();
+      expect(typeof showState?.completedAt).toBe('number');
+    });
+
+    it('does not auto-advance after completion', async () => {
+      const { runner } = createShowRunner();
+      await runner.executeSegment({ type: 'media', src: '/v.mp4', duration: 1, autoAdvance: true });
+
+      vi.advanceTimersByTime(5000); // well past completion
+
+      // Segment is still "active" — host decides what's next
+      expect(runner.isActive()).toBe(true);
+      expect(runner.getShowState()?.completedAt).toBeDefined();
+    });
+  });
+
+  describe('Leaderboard segment via ShowRunner', () => {
+    it('executeSegment with leaderboard sets showLeaderboard', async () => {
+      const { runner, getState } = createShowRunner();
+      await runner.executeSegment({ type: 'leaderboard' });
+      expect(getState().showLeaderboard).toBe(true);
+    });
+
+    it('DISMISS action completes leaderboard segment', async () => {
+      const { runner } = createShowRunner();
+      await runner.executeSegment({ type: 'leaderboard' });
+      runner.handleAction({ type: 'DISMISS' });
+      // After dismiss, the segment reports complete
+      expect(runner.isActive()).toBe(true); // still active until host finishes it
+    });
+
+    it('finishCurrentSegment clears showLeaderboard', async () => {
+      const { runner, getState } = createShowRunner();
+      await runner.executeSegment({ type: 'leaderboard' });
+      expect(getState().showLeaderboard).toBe(true);
+      runner.finishCurrentSegment();
+      expect(getState().showLeaderboard).toBe(false);
+    });
+  });
+});
+
+describe('LeaderboardRound (unit)', () => {
+  function createLeaderboardCallbacks() {
+    let state = createGameState();
+    return {
+      callbacks: {
+        getGameState: () => state,
+        setGameState: (s: GameState) => { state = s; },
+      },
+      getState: () => state,
+    };
+  }
+
+  it('setup sets showLeaderboard to true', async () => {
+    const { callbacks, getState } = createLeaderboardCallbacks();
+    const round = new LeaderboardRound(callbacks);
+    await round.setup({ type: 'leaderboard' });
+    expect(getState().showLeaderboard).toBe(true);
+  });
+
+  it('tick increments elapsed', async () => {
+    const { callbacks } = createLeaderboardCallbacks();
+    const round = new LeaderboardRound(callbacks);
+    await round.setup({ type: 'leaderboard' });
+
+    round.tick();
+    round.tick();
+    round.tick();
+    expect(round.getState().elapsed).toBe(3);
+  });
+
+  it('auto-completes at duration', async () => {
+    const { callbacks } = createLeaderboardCallbacks();
+    const round = new LeaderboardRound(callbacks);
+    await round.setup({ type: 'leaderboard', duration: 3 } as any);
+
+    round.tick();
+    round.tick();
+    expect(round.isComplete()).toBe(false);
+    round.tick();
+    expect(round.isComplete()).toBe(true);
+  });
+
+  it('does not auto-complete without duration', async () => {
+    const { callbacks } = createLeaderboardCallbacks();
+    const round = new LeaderboardRound(callbacks);
+    await round.setup({ type: 'leaderboard' });
+
+    for (let i = 0; i < 10; i++) round.tick();
+    expect(round.isComplete()).toBe(false);
+  });
+
+  it('DISMISS action marks complete', async () => {
+    const { callbacks } = createLeaderboardCallbacks();
+    const round = new LeaderboardRound(callbacks);
+    await round.setup({ type: 'leaderboard' });
+
+    round.handleAction({ type: 'DISMISS' });
+    expect(round.isComplete()).toBe(true);
+  });
+
+  it('cleanup sets showLeaderboard to false', async () => {
+    const { callbacks, getState } = createLeaderboardCallbacks();
+    const round = new LeaderboardRound(callbacks);
+    await round.setup({ type: 'leaderboard' });
+    expect(getState().showLeaderboard).toBe(true);
+
+    round.cleanup();
+    expect(getState().showLeaderboard).toBe(false);
+  });
+
+  it('getState returns correct shape', async () => {
+    const { callbacks } = createLeaderboardCallbacks();
+    const round = new LeaderboardRound(callbacks);
+    await round.setup({ type: 'leaderboard', duration: 10 } as any);
+
+    round.tick();
+    round.tick();
+
+    const state = round.getState();
+    expect(state.type).toBe('leaderboard');
+    expect(state.phase).toBe('SHOWING');
+    expect(state.elapsed).toBe(2);
+    expect(state.duration).toBe(10);
   });
 });

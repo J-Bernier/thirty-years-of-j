@@ -52,11 +52,12 @@ export interface GameState {
   history: GameHistoryEntry[];
   showLeaderboard: boolean;
   show?: {
-    isActive: boolean;
-    currentSegmentIndex: number;
+    instanceId: string;
+    instanceName: string;
+    isLive: boolean;
     currentSegmentType: string | null;
     currentSegmentTitle?: string;
-    totalSegments: number;
+    completedAt?: number;
     mediaState?: {
       src: string;
       title?: string;
@@ -82,13 +83,20 @@ export interface MediaPayload {
   duration?: number;
 }
 
-// Show definition — stored in Firestore, loaded by host to run a show
+// Show definition — stored in Firestore, a container for questions and media
 export interface ShowDefinition {
   id: string;
   name: string;
-  segments: import('./rounds').SegmentConfig[];
   createdAt: number;
   updatedAt: number;
+}
+
+// Per-show media link (stored in shows/{showId}/media subcollection)
+export interface ShowMedia {
+  id: string;
+  title: string;
+  src: string;
+  duration?: number;
 }
 
 export type QuizAdminAction = {
@@ -118,13 +126,22 @@ export interface ClientToServerEvents {
   adminGetQuestions: (callback: (questions: QuizQuestion[]) => void) => void;
   adminAddQuestion: (question: Omit<QuizQuestion, 'id'>, callback: (response: { success: boolean; error?: string }) => void) => void;
   adminDeleteQuestion: (id: string, callback: (success: boolean) => void) => void;
-  // Show management
-  showLoadAndStart: (segments: import('./rounds').SegmentConfig[]) => void;
-  showAdvance: () => void;
+  // Show lifecycle
+  showGoLive: (showId: string, callback: (result: { success: boolean; error?: string }) => void) => void;
+  showExecuteSegment: (config: import('./rounds').SegmentConfig) => void;
+  showFinishSegment: () => void;
+  showEndShow: () => void;
   showCancel: () => void;
-  showInsertSegment: (segment: import('./rounds').SegmentConfig) => void;
   // Show definition CRUD
   adminGetShows: (callback: (shows: ShowDefinition[]) => void) => void;
-  adminSaveShow: (show: Omit<ShowDefinition, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }, callback: (result: { success: boolean; id?: string; error?: string }) => void) => void;
+  adminSaveShow: (show: { name: string; id?: string }, callback: (result: { success: boolean; id?: string; error?: string }) => void) => void;
   adminDeleteShow: (id: string, callback: (success: boolean) => void) => void;
+  // Per-show question CRUD
+  adminGetShowQuestions: (showId: string, callback: (questions: QuizQuestion[]) => void) => void;
+  adminAddShowQuestion: (showId: string, question: Omit<QuizQuestion, 'id'>, callback: (response: { success: boolean; error?: string }) => void) => void;
+  adminDeleteShowQuestion: (showId: string, questionId: string, callback: (success: boolean) => void) => void;
+  // Per-show media CRUD
+  adminGetShowMedia: (showId: string, callback: (media: ShowMedia[]) => void) => void;
+  adminAddShowMedia: (showId: string, media: Omit<ShowMedia, 'id'>, callback: (response: { success: boolean; error?: string }) => void) => void;
+  adminDeleteShowMedia: (showId: string, mediaId: string, callback: (success: boolean) => void) => void;
 }

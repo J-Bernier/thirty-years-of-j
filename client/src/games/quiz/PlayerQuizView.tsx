@@ -16,17 +16,17 @@ export default function PlayerQuizView({ gameState, playerId }: PlayerQuizViewPr
   
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
 
-  // Reset local selection when question changes
+  // Reset local selection when question changes (new question index = new question)
   useEffect(() => {
-    if (quiz.phase === 'QUESTION') {
-      // If we already have a locked answer on server, sync it
-      if (myAnswer) {
-        setSelectedOption(myAnswer.optionIndex);
-      } else {
-        setSelectedOption(null);
-      }
+    setSelectedOption(null);
+  }, [quiz.currentQuestionIndex]);
+
+  // Sync local selection with server answer (reconnection recovery)
+  useEffect(() => {
+    if (quiz.phase === 'QUESTION' && myAnswer && selectedOption === null) {
+      setSelectedOption(myAnswer.optionIndex);
     }
-  }, [quiz.currentQuestionIndex, quiz.phase, myAnswer]);
+  }, [quiz.phase, myAnswer]);
 
   const handleSelect = (index: number) => {
     if (myAnswer?.locked) return;
@@ -35,7 +35,7 @@ export default function PlayerQuizView({ gameState, playerId }: PlayerQuizViewPr
   };
 
   const handleLock = () => {
-    if (selectedOption !== null) {
+    if (selectedOption !== null || myAnswer) {
       socket?.emit('quizLock');
     }
   };
@@ -100,7 +100,7 @@ export default function PlayerQuizView({ gameState, playerId }: PlayerQuizViewPr
                   variant={variant}
                   className={`h-16 text-lg justify-start px-6 ${showCorrect && isCorrect ? 'bg-green-600 hover:bg-green-700' : ''}`}
                   onClick={() => handleSelect(index)}
-                  disabled={myAnswer?.locked || quiz.phase !== 'QUESTION' || quiz.timer === 0}
+                  disabled={myAnswer?.locked || quiz.phase !== 'QUESTION'}
                 >
                   <span className="mr-4 font-bold opacity-50">{String.fromCharCode(65 + index)}.</span>
                   {option}
@@ -114,7 +114,7 @@ export default function PlayerQuizView({ gameState, playerId }: PlayerQuizViewPr
               className="w-full h-12 text-xl font-bold mt-4" 
               size="lg"
               onClick={handleLock}
-              disabled={selectedOption === null || myAnswer?.locked}
+              disabled={(selectedOption === null && !myAnswer) || myAnswer?.locked}
             >
               {myAnswer?.locked ? 'LOCKED' : 'LOCK ANSWER'}
             </Button>
