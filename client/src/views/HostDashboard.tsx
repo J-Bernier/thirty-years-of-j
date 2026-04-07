@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import GameConfiguration from '@/components/GameConfiguration';
-import type { ShowDefinition, ShowMedia, QuizQuestion } from '../types';
+import type { ShowDefinition, ShowMedia, QuizQuestion, GameState } from '../types';
 import { Trash2, Plus, ArrowLeft, Pencil, Check, X, ChevronDown } from 'lucide-react';
 
 type DashboardMode = 'picker' | 'prep' | 'lobby' | 'live' | 'postshow';
@@ -114,7 +114,7 @@ export default function HostDashboard() {
 
   const createShow = () => {
     if (!socket || !newShowName.trim()) return;
-    socket.emit('adminSaveShow', { name: newShowName.trim() }, (result) => {
+    socket.emit('adminSaveShow', { name: newShowName.trim() }, (result: { success: boolean; id?: string; error?: string }) => {
       if (result.success && result.id) {
         setCreatingShow(false);
         setNewShowName('');
@@ -133,7 +133,7 @@ export default function HostDashboard() {
   const goLive = () => {
     if (!socket || !selectedShowId) return;
     setGoingLive(true);
-    socket.emit('showGoLive', selectedShowId, (result) => {
+    socket.emit('showGoLive', selectedShowId, (result: { success: boolean; error?: string }) => {
       if (result.success) {
         setTimeout(() => {
           setGoingLive(false);
@@ -148,7 +148,7 @@ export default function HostDashboard() {
 
   const saveShowName = () => {
     if (!socket || !selectedShowId || !editNameValue.trim()) return;
-    socket.emit('adminSaveShow', { id: selectedShowId, name: editNameValue.trim() }, (result) => {
+    socket.emit('adminSaveShow', { id: selectedShowId, name: editNameValue.trim() }, (result: { success: boolean; id?: string; error?: string }) => {
       if (result.success) {
         setEditingName(false);
         fetchShowData(selectedShowId);
@@ -163,7 +163,7 @@ export default function HostDashboard() {
       src: newMediaSrc.trim(),
       duration: newMediaDuration ? parseInt(newMediaDuration) : undefined,
     };
-    socket.emit('adminAddShowMedia', selectedShowId, media, (result) => {
+    socket.emit('adminAddShowMedia', selectedShowId, media, (result: { success: boolean; error?: string }) => {
       if (result.success) {
         setNewMediaTitle('');
         setNewMediaSrc('');
@@ -705,10 +705,10 @@ function LeftPanel({
   livePhase, quiz, teamCount, answeredCount, showState, compact,
 }: {
   livePhase: string;
-  quiz: ReturnType<typeof useSocket>['gameState'] extends { quiz: infer Q } ? Q : never;
+  quiz: GameState['quiz'] | undefined;
   teamCount: number;
   answeredCount: number;
-  showState: ReturnType<typeof useSocket>['gameState'] extends { show?: infer S } ? S : never;
+  showState: GameState['show'] | undefined;
   compact?: boolean;
 }) {
   if (compact) {
@@ -1000,7 +1000,7 @@ function RightPanel({
       <div className="space-y-4">
         <div>
           <p className="text-sm text-gray-500 mb-2">Answer distribution</p>
-          {quiz.currentQuestion.options.map((opt: string, i: number) => {
+          {quiz.currentQuestion.options.map((_opt: string, i: number) => {
             const count = answerDistribution[i];
             const percent = (count / teamCount) * 100;
             const isCorrect = i === quiz.currentQuestion!.correctOptionIndex;
