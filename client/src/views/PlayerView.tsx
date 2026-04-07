@@ -4,22 +4,19 @@ import { useSocket } from '../context/SocketContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { GameState } from '@/types';
 import PlayerQuizView from '../games/quiz/PlayerQuizView';
 import ReactionPad from '@/components/ReactionPad';
 import { Smile } from 'lucide-react';
 import ChatBox from '@/components/ChatBox';
 import Modal from '@/components/ui/modal';
 export default function PlayerView() {
-  const { isConnected, socket } = useSocket();
+  const { isConnected, socket, gameState } = useSocket();
   const [teamName, setTeamName] = useState('');
   const [joined, setJoined] = useState(false);
-  const [gameState, setGameState] = useState<GameState | null>(null);
   const [isReactionModalOpen, setIsReactionModalOpen] = useState(false);
   const [playerId, setPlayerId] = useState<string>('');
 
   useEffect(() => {
-    // Initialize or retrieve persistent player ID
     let storedId = localStorage.getItem('playerId');
     if (!storedId) {
       storedId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -27,30 +24,21 @@ export default function PlayerView() {
     }
     setPlayerId(storedId);
 
-    // Restore team name if available
     const storedName = localStorage.getItem('teamName');
     if (storedName) {
       setTeamName(storedName);
     }
   }, []);
 
+  // Auto-rejoin: if gameState shows we're already in the game, mark as joined
   useEffect(() => {
-    if (!socket) return;
-
-    socket.on('gameStateUpdate', (state: GameState) => {
-      setGameState(state);
-      
-      // Check if we are already in the game (reconnection)
-      if (playerId && state.teams.some(t => t.id === playerId)) {
+    if (playerId && gameState?.teams.some(t => t.id === playerId)) {
+      if (!joined) {
         console.log('Auto-rejoining game with ID:', playerId);
         setJoined(true);
       }
-    });
-
-    return () => {
-      socket.off('gameStateUpdate');
-    };
-  }, [socket, playerId]);
+    }
+  }, [gameState, playerId, joined]);
 
   const handleJoin = () => {
     if (teamName.trim() && isConnected && socket && playerId) {

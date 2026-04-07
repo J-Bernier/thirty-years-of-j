@@ -1,13 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSocket } from '../context/SocketContext';
 import { Button } from '@/components/ui/button';
-import type { GameState, QuizQuestion } from '../types';
+import type { QuizQuestion } from '../types';
 
 import GameConfiguration from '@/components/GameConfiguration';
 
 export default function HostDashboard() {
-  const { isConnected, socket } = useSocket();
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const { isConnected, socket, gameState } = useSocket();
   const [showEmergency, setShowEmergency] = useState(false);
   const [showScoreAdjust, setShowScoreAdjust] = useState(false);
   const [showFx, setShowFx] = useState(false);
@@ -25,12 +24,9 @@ export default function HostDashboard() {
 
   useEffect(() => {
     if (!socket) return;
-    socket.on('gameStateUpdate', (state: GameState) => setGameState(state));
-    // Fetch question count for readiness display
     socket.emit('adminGetQuestions', (questions: QuizQuestion[]) => {
       setQuestionCount(questions.length);
     });
-    return () => { socket.off('gameStateUpdate'); };
   }, [socket]);
 
   const teamCount = gameState?.teams.length || 0;

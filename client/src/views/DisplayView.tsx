@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSocket } from '../context/SocketContext';
-import type { GameState, ChatMessage, MediaPayload } from '../types';
+import type { ChatMessage, MediaPayload } from '../types';
 import { GAME_LAUNCH_DISPLAY_MS, REACTION_DISPLAY_DURATION_MS, CHAT_HISTORY_MAX } from '@shared/constants';
 
 import DisplayQuizView from '../games/quiz/DisplayQuizView';
@@ -17,8 +17,7 @@ interface PlayerReactionState {
 }
 
 export default function DisplayView() {
-  const { isConnected, socket } = useSocket();
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const { isConnected, socket, gameState } = useSocket();
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [playerReactions, setPlayerReactions] = useState<Record<string, PlayerReactionState>>({});
   const [mediaPayload, setMediaPayload] = useState<MediaPayload | null>(null);
@@ -37,11 +36,9 @@ export default function DisplayView() {
     prevActiveRound.current = gameState?.activeRound || null;
   }, [gameState?.activeRound]);
 
-  // Socket event listeners
+  // Socket event listeners (gameState comes from context, not a local listener)
   useEffect(() => {
     if (!socket) return;
-
-    socket.on('gameStateUpdate', (state: GameState) => setGameState(state));
 
     socket.on('triggerAnimation', (type: string) => {
       if (type === 'confetti') {
@@ -77,7 +74,6 @@ export default function DisplayView() {
     });
 
     return () => {
-      socket.off('gameStateUpdate');
       socket.off('triggerAnimation');
       socket.off('chatMessage');
       socket.off('reactionTriggered');
