@@ -123,7 +123,8 @@ const disconnectTimeouts = new Map<string, NodeJS.Timeout>();
 io.on('connection', (socket) => {
   console.log('a user connected', socket.id);
 
-  // Send initial state
+  // Send initial state (merge show state so reconnecting clients see current segment)
+  gameState.show = showRunner.getShowState();
   socket.emit('gameStateUpdate', gameState);
 
   socket.on('joinTeam', ({ name, playerId }: { name: string, playerId: string }) => {
