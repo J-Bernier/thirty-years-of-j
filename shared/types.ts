@@ -82,6 +82,15 @@ export interface MediaPayload {
   duration?: number;
 }
 
+// Show definition — stored in Firestore, loaded by host to run a show
+export interface ShowDefinition {
+  id: string;
+  name: string;
+  segments: import('./rounds').SegmentConfig[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type QuizAdminAction = {
   type: 'SETUP' | 'START' | 'NEXT' | 'REVEAL' | 'CANCEL' | 'SKIP_TO_END';
   payload?: Record<string, unknown>;
@@ -113,4 +122,9 @@ export interface ClientToServerEvents {
   showLoadAndStart: (segments: import('./rounds').SegmentConfig[]) => void;
   showAdvance: () => void;
   showCancel: () => void;
+  showInsertSegment: (segment: import('./rounds').SegmentConfig) => void;
+  // Show definition CRUD
+  adminGetShows: (callback: (shows: ShowDefinition[]) => void) => void;
+  adminSaveShow: (show: Omit<ShowDefinition, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }, callback: (result: { success: boolean; id?: string; error?: string }) => void) => void;
+  adminDeleteShow: (id: string, callback: (success: boolean) => void) => void;
 }

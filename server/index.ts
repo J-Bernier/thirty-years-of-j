@@ -254,6 +254,59 @@ io.on('connection', (socket) => {
     showRunner.cancelShow();
   });
 
+  socket.on('showInsertSegment', (segment) => {
+    showRunner.insertSegment(segment);
+  });
+
+  // Show definition CRUD
+  socket.on('adminGetShows', async (callback) => {
+    try {
+      const snapshot = await db.collection('shows').orderBy('updatedAt', 'desc').get();
+      const shows = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(shows as any);
+    } catch (error) {
+      console.error('Error fetching shows:', error);
+      callback([]);
+    }
+  });
+
+  socket.on('adminSaveShow', async (show, callback) => {
+    try {
+      const now = Date.now();
+      if (show.id) {
+        // Update existing
+        await db.collection('shows').doc(show.id).set({
+          name: show.name,
+          segments: show.segments,
+          updatedAt: now,
+        }, { merge: true });
+        callback({ success: true, id: show.id });
+      } else {
+        // Create new
+        const doc = await db.collection('shows').add({
+          name: show.name,
+          segments: show.segments,
+          createdAt: now,
+          updatedAt: now,
+        });
+        callback({ success: true, id: doc.id });
+      }
+    } catch (error) {
+      console.error('Error saving show:', error);
+      callback({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  socket.on('adminDeleteShow', async (id, callback) => {
+    try {
+      await db.collection('shows').doc(id).delete();
+      callback(true);
+    } catch (error) {
+      console.error('Error deleting show:', error);
+      callback(false);
+    }
+  });
+
   socket.on('adminUpdateScore', ({ teamId, delta }) => {
     if (!teamId || typeof delta !== 'number') return;
     const team = gameState.teams.find(t => t.id === teamId);

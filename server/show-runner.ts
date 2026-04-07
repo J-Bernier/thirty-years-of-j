@@ -151,6 +151,19 @@ export class ShowRunner {
     this.callbacks.broadcastState();
   }
 
+  /** Insert a segment after the current one (for live deviation). */
+  insertSegment(segment: SegmentConfig): void {
+    if (!this.isActive()) return;
+    this.segments.splice(this.currentIndex + 1, 0, segment);
+    this.callbacks.broadcastState();
+  }
+
+  /** Get the remaining segment configs (for host preview). */
+  getRemainingSegments(): SegmentConfig[] {
+    if (this.currentIndex < 0) return this.segments;
+    return this.segments.slice(this.currentIndex + 1);
+  }
+
   isActive(): boolean {
     return this.currentIndex >= 0 && this.currentIndex < this.segments.length;
   }

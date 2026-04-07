@@ -4,13 +4,14 @@ import { Button } from '@/components/ui/button';
 import type { QuizQuestion } from '../types';
 
 import GameConfiguration from '@/components/GameConfiguration';
+import ShowBuilder from '@/components/ShowBuilder';
 
 export default function HostDashboard() {
   const { isConnected, socket, gameState } = useSocket();
   const [showEmergency, setShowEmergency] = useState(false);
   const [showScoreAdjust, setShowScoreAdjust] = useState(false);
   const [showFx, setShowFx] = useState(false);
-  const [activeTab, setActiveTab] = useState<'teams' | 'questions' | 'history'>('teams');
+  const [activeTab, setActiveTab] = useState<'teams' | 'shows' | 'questions' | 'history'>('teams');
   const [questionCount, setQuestionCount] = useState<number | null>(null);
 
   // Per-action debounce
@@ -131,7 +132,7 @@ export default function HostDashboard() {
             {/* Admin tabs — custom styling */}
             <div className="mt-2">
               <div className="flex border-b border-slate-200">
-                {(['teams', 'questions', 'history'] as const).map(tab => (
+                {(['teams', 'shows', 'questions', 'history'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -162,6 +163,7 @@ export default function HostDashboard() {
                     </ul>
                   )
                 )}
+                {activeTab === 'shows' && <ShowBuilder />}
                 {activeTab === 'questions' && <GameConfiguration />}
                 {activeTab === 'history' && (
                   !gameState?.history?.length ? (
@@ -285,23 +287,52 @@ export default function HostDashboard() {
 
         ) : quiz?.phase === 'END' ? (
           /* ═══ QUIZ END ═══ */
-          <div className="space-y-4 py-12 text-center">
+          <div className="space-y-4 py-8 text-center">
             <p className="text-lg font-semibold text-slate-800">Podium on screen</p>
             <p className="text-sm text-slate-400">The audience can see the results</p>
-            <Button
-              className="w-full min-h-[56px] text-lg font-bold rounded-2xl text-white"
-              style={{ backgroundColor: '#e94560' }}
-              onClick={() => handleAction('back-lobby', () => sendQuizAction('CANCEL'))}
-            >
-              Back to Lobby
-            </Button>
+            {showState?.isActive ? (
+              <Button
+                className="w-full min-h-[56px] text-lg font-bold rounded-2xl text-white"
+                style={{ backgroundColor: '#e94560' }}
+                onClick={() => handleAction('show-advance', () => socket?.emit('showAdvance'))}
+              >
+                Next Segment →
+              </Button>
+            ) : (
+              <Button
+                className="w-full min-h-[56px] text-lg font-bold rounded-2xl text-white"
+                style={{ backgroundColor: '#e94560' }}
+                onClick={() => handleAction('back-lobby', () => sendQuizAction('CANCEL'))}
+              >
+                Back to Lobby
+              </Button>
+            )}
+            {/* Insert ad-hoc segment */}
+            {showState?.isActive && (
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" size="sm" className="flex-1 rounded-lg text-xs"
+                  onClick={() => { socket?.emit('showInsertSegment', { type: 'media', src: '', title: 'Break', duration: 30, autoAdvance: true }); }}>
+                  + Insert Break
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 rounded-lg text-xs"
+                  onClick={() => { socket?.emit('showInsertSegment', { type: 'leaderboard', duration: 15 }); }}>
+                  + Insert Leaderboard
+                </Button>
+              </div>
+            )}
           </div>
 
         ) : (
           /* ═══ BREAK / MEDIA ═══ */
-          <div className="space-y-4 py-12 text-center">
-            <p className="text-[11px] uppercase tracking-widest text-slate-400">Now Playing</p>
-            <p className="text-xl font-bold text-slate-800">{showState?.currentSegmentType || 'Break'}</p>
+          <div className="space-y-4 py-8 text-center">
+            <p className="text-[11px] uppercase tracking-widest text-slate-400">
+              {showState?.isActive
+                ? `Segment ${(showState.currentSegmentIndex ?? 0) + 1} of ${showState.totalSegments}`
+                : 'Now Playing'}
+            </p>
+            <p className="text-xl font-bold text-slate-800">
+              {showState?.currentSegmentTitle || showState?.currentSegmentType || 'Break'}
+            </p>
             <Button
               className="w-full min-h-[56px] text-lg font-bold rounded-2xl text-white"
               style={{ backgroundColor: '#e94560' }}
@@ -309,6 +340,18 @@ export default function HostDashboard() {
             >
               Next Segment →
             </Button>
+            {showState?.isActive && (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1 rounded-lg text-xs"
+                  onClick={() => { socket?.emit('showInsertSegment', { type: 'media', src: '', title: 'Break', duration: 30, autoAdvance: true }); }}>
+                  + Insert Break
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 rounded-lg text-xs"
+                  onClick={() => { socket?.emit('showInsertSegment', { type: 'leaderboard', duration: 15 }); }}>
+                  + Insert Leaderboard
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
