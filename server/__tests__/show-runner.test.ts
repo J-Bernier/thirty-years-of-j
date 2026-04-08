@@ -32,6 +32,11 @@ function createGameState(): GameState {
     activeRound: null,
     history: [],
     showLeaderboard: false,
+    stage: {
+      mood: 'neutral',
+      overlay: { type: null },
+      audio: { cue: null, music: null },
+    },
     quiz: {
       isActive: false,
       config: { timePerQuestion: DEFAULT_TIME_PER_QUESTION, totalQuestions: 0 },

@@ -44,6 +44,28 @@ export interface GameHistoryEntry {
   scores: { teamId: string; teamName: string; score: number }[];
 }
 
+export type StageMood = 'hype' | 'chill' | 'neutral';
+
+export interface StageOverlay {
+  type: 'title' | 'media' | 'leaderboard' | 'qr' | 'game' | null;
+  content?: string;
+}
+
+export interface StageState {
+  mood: StageMood;
+  overlay: StageOverlay;
+  audio: {
+    cue: string | null;
+    music: string | null;
+  };
+}
+
+export const DEFAULT_STAGE_STATE: StageState = {
+  mood: 'neutral',
+  overlay: { type: null },
+  audio: { cue: null, music: null },
+};
+
 export interface GameState {
   phase: GamePhase;
   teams: Team[];
@@ -51,6 +73,7 @@ export interface GameState {
   quiz: QuizState;
   history: GameHistoryEntry[];
   showLeaderboard: boolean;
+  stage: StageState;
   show?: {
     instanceId: string;
     instanceName: string;
@@ -126,6 +149,12 @@ export interface ClientToServerEvents {
   adminGetQuestions: (callback: (questions: QuizQuestion[]) => void) => void;
   adminAddQuestion: (question: Omit<QuizQuestion, 'id'>, callback: (response: { success: boolean; error?: string }) => void) => void;
   adminDeleteQuestion: (id: string, callback: (success: boolean) => void) => void;
+  // Stage controls
+  stageMoodSet: (mood: StageMood) => void;
+  stageOverlaySet: (overlay: StageOverlay, callback: (result: { success: boolean; error?: string }) => void) => void;
+  stageOverlayClear: () => void;
+  stageAudioCue: (url: string) => void;
+  stageAudioMusic: (url: string | null) => void;
   // Show lifecycle
   showGoLive: (showId: string, callback: (result: { success: boolean; error?: string }) => void) => void;
   showExecuteSegment: (config: import('./rounds').SegmentConfig) => void;

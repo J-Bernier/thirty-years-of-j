@@ -3,12 +3,34 @@ import { useSocket } from '../context/SocketContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
 import GameConfiguration from '@/components/GameConfiguration';
 import type { ShowDefinition, ShowMedia, QuizQuestion, GameState } from '../types';
-import { Trash2, Plus, ArrowLeft, Pencil, Check, X, ChevronDown } from 'lucide-react';
+import { Trash2, Plus, ArrowLeft, Pencil, Check, X, ChevronDown, Play, Trophy, Monitor, QrCode, Flame, Snowflake, VolumeX, ShieldAlert, Eye, SkipForward, StopCircle, Send, Minus } from 'lucide-react';
 
-type DashboardMode = 'picker' | 'prep' | 'lobby' | 'live' | 'postshow';
+type DashboardMode = 'picker' | 'prep' | 'live';
+type LiveTab = 'sounds' | 'titles' | 'games' | 'media' | 'teams';
+
+// Sound cues
+const SOUND_CUES = [
+  { emoji: '🥁', label: 'Drumroll', url: '/sfx/drumroll.mp3' },
+  { emoji: '🎺', label: 'Fanfare', url: '/sfx/fanfare.mp3' },
+  { emoji: '👏', label: 'Applause', url: '/sfx/applause.mp3' },
+  { emoji: '😰', label: 'Suspense', url: '/sfx/suspense.mp3' },
+  { emoji: '🎵', label: 'Intro Music', url: '/sfx/intro.mp3' },
+  { emoji: '📺', label: 'TV Static', url: '/sfx/static.mp3' },
+  { emoji: '❌', label: 'Wrong Buzz', url: '/sfx/wrong.mp3' },
+  { emoji: '✅', label: 'Correct Ding', url: '/sfx/correct.mp3' },
+  { emoji: '🎤', label: 'Mic Drop', url: '/sfx/micdrop.mp3' },
+];
+
+// Hardcoded title cards
+const TITLE_CARDS = [
+  '30 Years of J',
+  'Round 1',
+  'Round 2',
+  'Final Round',
+  'Thank You!',
+];
 
 export default function HostDashboard() {
   const { isConnected, socket, gameState } = useSocket();
@@ -35,9 +57,10 @@ export default function HostDashboard() {
 
   // Live state
   const [goingLive, setGoingLive] = useState(false);
-  const [segmentComplete, setSegmentComplete] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [liveTab, setLiveTab] = useState<LiveTab>('sounds');
   const [mediaPicker, setMediaPicker] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
 
   // Per-action debounce
   const blockedActions = useRef(new Set<string>());
@@ -51,8 +74,7 @@ export default function HostDashboard() {
   // Mode inference on mount (refresh recovery)
   useEffect(() => {
     if (!gameState) return;
-    if (gameState.show?.isLive && gameState.show.currentSegmentType) setMode('live');
-    else if (gameState.show?.isLive) setMode('lobby');
+    if (gameState.show?.isLive) setMode('live');
     else {
       const savedShowId = localStorage.getItem('hostSelectedShowId');
       if (savedShowId) setMode('prep');
@@ -60,17 +82,16 @@ export default function HostDashboard() {
     }
   }, []); // only on mount
 
-  // Transition from lobby to live when first segment starts
+  // Transition to live when show goes live
   useEffect(() => {
-    if (mode === 'lobby' && gameState?.show?.isLive && gameState.show.currentSegmentType) {
+    if (gameState?.show?.isLive && mode !== 'live' && !goingLive) {
       setMode('live');
     }
-  }, [mode, gameState?.show?.currentSegmentType]);
+  }, [gameState?.show?.isLive]);
 
-  // Transition to postshow when show is no longer live (host ended it)
+  // Transition back to picker when show ends
   useEffect(() => {
-    if ((mode === 'live' || mode === 'lobby') && gameState && !gameState.show?.isLive && gameState.phase === 'LOBBY') {
-      // Show was cancelled or ended, go back to picker
+    if (mode === 'live' && gameState && !gameState.show?.isLive && gameState.phase === 'LOBBY') {
       setMode('picker');
     }
   }, [mode, gameState?.show?.isLive, gameState?.phase]);
@@ -102,7 +123,7 @@ export default function HostDashboard() {
   }, [socket]);
 
   useEffect(() => {
-    if (mode === 'prep' && selectedShowId) fetchShowData(selectedShowId);
+    if ((mode === 'prep' || mode === 'live') && selectedShowId) fetchShowData(selectedShowId);
   }, [mode, selectedShowId, fetchShowData]);
 
   // Helpers
@@ -137,7 +158,7 @@ export default function HostDashboard() {
       if (result.success) {
         setTimeout(() => {
           setGoingLive(false);
-          setMode('lobby');
+          setMode('live');
         }, 1500);
       } else {
         setGoingLive(false);
@@ -191,8 +212,6 @@ export default function HostDashboard() {
 
   const finishSegment = () => {
     socket?.emit('showFinishSegment');
-    setSegmentComplete(true);
-    setTimeout(() => setSegmentComplete(false), 1000);
   };
 
   const endShow = () => {
@@ -207,42 +226,16 @@ export default function HostDashboard() {
   const teamCount = gameState?.teams.length || 0;
   const quiz = gameState?.quiz;
   const showState = gameState?.show;
-  const leaderboardActive = !!gameState?.showLeaderboard;
   const answeredCount = gameState?.teams.filter(t => quiz?.answers[t.id]?.locked).length || 0;
   const isLastQuestion = (quiz?.currentQuestionIndex ?? 0) === (quiz?.config.totalQuestions || 0) - 1;
+  const quizActive = gameState?.activeRound === 'QUIZ' && quiz?.phase !== 'END';
+  const leaderboardActive = !!gameState?.showLeaderboard;
 
-  const answerDistribution = quiz?.phase === 'QUESTION' && quiz.currentQuestion
+  const answerDistribution = quiz?.currentQuestion
     ? quiz.currentQuestion.options.map((_, i) =>
         gameState?.teams.filter(t => quiz.answers[t.id]?.optionIndex === i).length || 0
       )
     : null;
-
-  const teamResults = quiz?.phase === 'REVEAL' && quiz.currentQuestion
-    ? gameState?.teams.map(t => {
-        const answer = quiz.answers[t.id];
-        const correct = answer?.locked && answer.optionIndex === quiz.currentQuestion!.correctOptionIndex;
-        return { id: t.id, name: t.name, color: t.color, correct, answered: !!answer?.locked, score: t.score };
-      }).sort((a, b) => b.score - a.score) || []
-    : null;
-
-  // Determine live segment state
-  const liveSegment = showState?.currentSegmentType;
-  const quizPhase = quiz?.phase;
-
-  const getLivePhase = (): string => {
-    if (!liveSegment) return 'idle';
-    if (liveSegment === 'quiz') {
-      if (quizPhase === 'QUESTION') return 'quiz-question';
-      if (quizPhase === 'REVEAL') return 'quiz-reveal';
-      if (quizPhase === 'END') return 'quiz-end';
-      return 'quiz-idle';
-    }
-    if (liveSegment === 'media') return 'media';
-    if (liveSegment === 'leaderboard') return 'leaderboard';
-    return 'idle';
-  };
-
-  const livePhase = getLivePhase();
 
   // =============================================
   // RENDER
@@ -252,7 +245,7 @@ export default function HostDashboard() {
     <div className="h-screen flex flex-col" style={{ backgroundColor: '#0a0a1a', color: '#f0f0f0' }}>
       <AnimatePresence mode="wait">
 
-        {/* ═══ GO LIVE OVERLAY ═══ */}
+        {/* GO LIVE OVERLAY */}
         {goingLive && (
           <motion.div
             key="going-live"
@@ -273,7 +266,7 @@ export default function HostDashboard() {
           </motion.div>
         )}
 
-        {/* ═══ MODE: PICKER ═══ */}
+        {/* MODE: PICKER */}
         {mode === 'picker' && (
           <motion.div
             key="picker"
@@ -283,7 +276,6 @@ export default function HostDashboard() {
             className="flex-1 overflow-y-auto"
           >
             <div className="max-w-2xl mx-auto p-4 space-y-4">
-              {/* Header */}
               <div className="flex items-center justify-between">
                 <h1 className="text-xl font-bold">Shows</h1>
                 <Button
@@ -295,7 +287,6 @@ export default function HostDashboard() {
                 </Button>
               </div>
 
-              {/* Create form */}
               {creatingShow && (
                 <div className="flex gap-2 p-3 rounded-lg" style={{ backgroundColor: '#1a1a2e' }}>
                   <Input
@@ -313,7 +304,6 @@ export default function HostDashboard() {
                 </div>
               )}
 
-              {/* Empty state */}
               {shows.length === 0 && !creatingShow && (
                 <div className="text-center py-16 space-y-3">
                   <p className="text-2xl font-bold">Ready to host?</p>
@@ -328,7 +318,6 @@ export default function HostDashboard() {
                 </div>
               )}
 
-              {/* Most recent show — promoted */}
               {shows.length > 0 && (
                 <>
                   <div
@@ -349,7 +338,6 @@ export default function HostDashboard() {
                     </div>
                   </div>
 
-                  {/* Other shows — compact rows */}
                   {shows.slice(1).map(show => (
                     <div
                       key={show.id}
@@ -384,7 +372,7 @@ export default function HostDashboard() {
           </motion.div>
         )}
 
-        {/* ═══ MODE: PREP ═══ */}
+        {/* MODE: PREP */}
         {mode === 'prep' && selectedShowId && (
           <motion.div
             key="prep"
@@ -394,7 +382,6 @@ export default function HostDashboard() {
             className="flex-1 overflow-y-auto"
           >
             <div className="max-w-2xl mx-auto p-4 space-y-5">
-              {/* Back + show name */}
               <div className="flex items-center gap-3">
                 <button
                   className="text-gray-500 hover:text-white transition-colors"
@@ -440,13 +427,11 @@ export default function HostDashboard() {
                 )}
               </div>
 
-              {/* Readiness summary */}
               <div className="flex gap-4 text-sm text-gray-400">
                 <span>{questionCount} question{questionCount !== 1 ? 's' : ''}</span>
                 <span>{showMedia.length} media clip{showMedia.length !== 1 ? 's' : ''}</span>
               </div>
 
-              {/* Round types */}
               <div className="space-y-4">
                 {/* Quiz round card */}
                 <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#1a1a2e' }}>
@@ -553,7 +538,7 @@ export default function HostDashboard() {
                   )}
                 </div>
 
-                {/* Leaderboard card (no content to manage, just info) */}
+                {/* Leaderboard card */}
                 <div className="rounded-xl p-4 flex items-center gap-3" style={{ backgroundColor: '#1a1a2e' }}>
                   <div className="w-10 h-10 rounded-lg bg-[#ffb700]/20 flex items-center justify-center text-lg">
                     <span role="img" aria-label="leaderboard">&#127942;</span>
@@ -565,7 +550,6 @@ export default function HostDashboard() {
                 </div>
               </div>
 
-              {/* GO LIVE button */}
               <Button
                 className="w-full h-14 text-xl font-bold text-white disabled:opacity-40"
                 style={{ backgroundColor: '#e94560' }}
@@ -581,258 +565,233 @@ export default function HostDashboard() {
           </motion.div>
         )}
 
-        {/* ═══ MODE: LOBBY / LIVE ═══ */}
-        {(mode === 'lobby' || mode === 'live') && (
+        {/* MODE: LIVE — Trigger Grid */}
+        {mode === 'live' && (
           <motion.div
-            key="live-shell"
+            key="live"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="flex-1 flex flex-col overflow-hidden"
           >
-            {/* Connection indicator */}
-            <div className="flex-shrink-0 px-4 py-2 flex items-center justify-between" style={{ backgroundColor: '#1a1a2e' }}>
+            {/* Status bar */}
+            <div className="flex-shrink-0 px-3 py-2 flex items-center justify-between" style={{ backgroundColor: '#1a1a2e' }}>
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400' : 'bg-red-500 animate-pulse'}`} />
                 <span className="text-xs font-black uppercase tracking-widest bg-red-500 text-white px-2 py-0.5 rounded">
                   LIVE
                 </span>
                 {showState?.instanceName && (
-                  <span className="text-xs text-gray-500 ml-2">{showState.instanceName}</span>
+                  <span className="text-xs text-gray-500 ml-1 truncate max-w-[120px]">{showState.instanceName}</span>
                 )}
               </div>
               <div className="flex items-center gap-3">
                 {quiz?.phase === 'QUESTION' && (
-                  <>
-                    <span className={`text-2xl font-black tabular-nums font-mono ${(quiz?.timer ?? 99) <= 5 ? 'text-red-400' : ''}`}>
-                      {quiz?.timer}s
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      Q{(quiz?.currentQuestionIndex ?? 0) + 1}/{quiz?.config.totalQuestions}
-                    </span>
-                  </>
+                  <span className={`text-lg font-black tabular-nums font-mono ${(quiz?.timer ?? 99) <= 5 ? 'text-red-400' : ''}`}>
+                    {quiz?.timer}s
+                  </span>
                 )}
                 <span className="text-xs text-gray-500">{teamCount} team{teamCount !== 1 ? 's' : ''}</span>
               </div>
             </div>
 
-            {/* 3-panel layout (lg+) or stacked (mobile) */}
-            <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
-
-              {/* LEFT PANEL — Status */}
-              <div className="hidden lg:flex lg:w-1/4 flex-col p-4 border-r" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                <p className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Status</p>
-                <LeftPanel livePhase={livePhase} quiz={quiz} teamCount={teamCount} answeredCount={answeredCount} showState={showState} />
-              </div>
-
-              {/* CENTER PANEL — Actions */}
-              <div className="flex-1 overflow-y-auto p-4 flex flex-col justify-center">
-                {segmentComplete ? (
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="text-center"
-                  >
-                    <span className="text-4xl">&#10003;</span>
-                    <p className="text-green-400 font-semibold mt-2">Complete</p>
-                  </motion.div>
-                ) : (
-                  <CenterPanel
-                    livePhase={livePhase}
-                    quiz={quiz}
-                    isLastQuestion={isLastQuestion}
-                    questionCount={questionCount}
-                    showMedia={showMedia}
-                    mediaPicker={mediaPicker}
-                    setMediaPicker={setMediaPicker}
-                    handleAction={handleAction}
-                    sendQuizAction={sendQuizAction}
-                    executeSegment={executeSegment}
-                    finishSegment={finishSegment}
-                    actionError={actionError}
-                  />
-                )}
-
-                {/* Mobile: collapsed status line */}
-                <div className="lg:hidden mt-4">
-                  <LeftPanel livePhase={livePhase} quiz={quiz} teamCount={teamCount} answeredCount={answeredCount} showState={showState} compact />
-                </div>
-              </div>
-
-              {/* RIGHT PANEL — Context */}
-              <div className="hidden lg:flex lg:w-1/4 flex-col p-4 border-l overflow-y-auto" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-                <p className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Context</p>
-                <RightPanel
-                  livePhase={livePhase}
-                  quiz={quiz}
-                  gameState={gameState}
-                  answerDistribution={answerDistribution}
-                  teamResults={teamResults}
-                  questionCount={questionCount}
-                  showMedia={showMedia}
+            {/* Top section: Instant Triggers (~35%) */}
+            <div className="flex-shrink-0 p-3" style={{ minHeight: '35%' }}>
+              {quizActive ? (
+                <QuizTriggers
+                  quiz={quiz!}
+                  isLastQuestion={isLastQuestion}
+                  handleAction={handleAction}
+                  sendQuizAction={sendQuizAction}
+                  finishSegment={finishSegment}
                 />
-              </div>
+              ) : (
+                <StageTriggers
+                  leaderboardActive={leaderboardActive}
+                  showMedia={showMedia}
+                  mediaPicker={mediaPicker}
+                  setMediaPicker={setMediaPicker}
+                  handleAction={handleAction}
+                  executeSegment={executeSegment}
+                  finishSegment={finishSegment}
+                  socket={socket}
+                />
+              )}
             </div>
 
-            {/* FX BAR */}
-            <FxBar
-              socket={socket}
-              leaderboardActive={leaderboardActive}
-              handleAction={handleAction}
-              onEndShow={() => {
-                if (confirm('End this show?')) {
-                  socket?.emit('showFinishSegment');
-                  setMode('postshow');
-                }
-              }}
-            />
-          </motion.div>
-        )}
+            {/* Divider */}
+            <div className="flex-shrink-0 h-px" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }} />
 
-        {/* ═══ MODE: POSTSHOW ═══ */}
-        {mode === 'postshow' && (
-          <PostShow gameState={gameState} onEnd={endShow} />
+            {/* Bottom section: Browsable Pages (~65%) */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {quizActive ? (
+                <QuizInfoPanel
+                  quiz={quiz!}
+                  gameState={gameState!}
+                  answeredCount={answeredCount}
+                  teamCount={teamCount}
+                  answerDistribution={answerDistribution}
+                />
+              ) : (
+                <>
+                  {/* Tab bar */}
+                  <div className="flex-shrink-0 flex border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                    {(['sounds', 'titles', 'games', 'media', 'teams'] as LiveTab[]).map(tab => (
+                      <button
+                        key={tab}
+                        className={`flex-1 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                          liveTab === tab ? 'text-[#e94560]' : 'text-gray-500 hover:text-gray-300'
+                        }`}
+                        style={liveTab === tab ? { borderBottom: '2px solid #e94560' } : undefined}
+                        onClick={() => setLiveTab(tab)}
+                      >
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Tab content */}
+                  <div className="flex-1 overflow-y-auto p-3">
+                    {liveTab === 'sounds' && (
+                      <SoundsTab socket={socket} handleAction={handleAction} />
+                    )}
+                    {liveTab === 'titles' && (
+                      <TitlesTab
+                        socket={socket}
+                        handleAction={handleAction}
+                        customTitle={customTitle}
+                        setCustomTitle={setCustomTitle}
+                      />
+                    )}
+                    {liveTab === 'games' && (
+                      <GamesTab
+                        questionCount={questionCount}
+                        handleAction={handleAction}
+                        executeSegment={executeSegment}
+                      />
+                    )}
+                    {liveTab === 'media' && (
+                      <MediaTab
+                        showMedia={showMedia}
+                        socket={socket}
+                        handleAction={handleAction}
+                      />
+                    )}
+                    {liveTab === 'teams' && (
+                      <TeamsTab
+                        gameState={gameState}
+                        socket={socket}
+                        handleAction={handleAction}
+                      />
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* End show button — always accessible */}
+            <div className="flex-shrink-0 px-3 py-2 flex justify-end" style={{ backgroundColor: '#1a1a2e', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <button
+                className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                onClick={() => {
+                  if (confirm('End this show?')) endShow();
+                }}
+              >
+                End Show
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// LEFT PANEL
-// ─────────────────────────────────────────────
-function LeftPanel({
-  livePhase, quiz, teamCount, answeredCount, showState, compact,
-}: {
-  livePhase: string;
-  quiz: GameState['quiz'] | undefined;
-  teamCount: number;
-  answeredCount: number;
-  showState: GameState['show'] | undefined;
-  compact?: boolean;
-}) {
-  if (compact) {
-    return (
-      <div className="flex items-center gap-3 text-sm text-gray-400">
-        <span className="font-semibold text-white">
-          {livePhase === 'idle' && 'Ready'}
-          {livePhase === 'quiz-question' && `Q${(quiz?.currentQuestionIndex ?? 0) + 1} — ${answeredCount}/${teamCount} answered`}
-          {livePhase === 'quiz-reveal' && 'Reveal'}
-          {livePhase === 'quiz-end' && 'Round Complete'}
-          {livePhase === 'quiz-idle' && 'Quiz Setup'}
-          {livePhase === 'media' && 'Media Break'}
-          {livePhase === 'leaderboard' && 'Leaderboard'}
-        </span>
-        {livePhase === 'idle' && <span>{teamCount} teams joined</span>}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {livePhase === 'idle' && (
-        <>
-          <p className="text-2xl font-bold">Ready</p>
-          <p className="text-sm text-gray-500">{teamCount} team{teamCount !== 1 ? 's' : ''} joined</p>
-        </>
-      )}
-      {livePhase === 'quiz-question' && (
-        <>
-          <p className={`text-5xl font-black tabular-nums font-mono ${(quiz?.timer ?? 99) <= 5 ? 'text-red-400' : (quiz?.timer ?? 99) <= 10 ? 'text-yellow-400' : ''}`}>
-            {quiz?.timer}s
-          </p>
-          <p className="text-sm font-semibold uppercase tracking-wider text-gray-500">Quiz Round</p>
-          <p className="text-base text-gray-200">Q{(quiz?.currentQuestionIndex ?? 0) + 1} of {quiz?.config.totalQuestions}</p>
-          <p className="text-sm text-gray-500">{answeredCount}/{teamCount} answered</p>
-        </>
-      )}
-      {livePhase === 'quiz-reveal' && (
-        <>
-          <p className="text-2xl font-bold">Reveal</p>
-          <p className="text-sm text-gray-500">
-            {quiz?.currentQuestion?.options[quiz?.currentQuestion?.correctOptionIndex ?? 0]}
-          </p>
-        </>
-      )}
-      {livePhase === 'quiz-end' && (
-        <p className="text-2xl font-bold">Round Complete</p>
-      )}
-      {livePhase === 'quiz-idle' && (
-        <>
-          <p className="text-2xl font-bold">Quiz</p>
-          <p className="text-sm text-gray-500">Setting up...</p>
-        </>
-      )}
-      {livePhase === 'media' && (
-        <>
-          <p className="text-2xl font-bold">Media Break</p>
-          {showState?.mediaState && (
-            <>
-              {showState.mediaState.title && (
-                <p className="text-base text-gray-200">{showState.mediaState.title}</p>
-              )}
-              <p className="text-sm text-gray-500">
-                {showState.mediaState.elapsed}s
-                {showState.mediaState.duration ? ` / ${showState.mediaState.duration}s` : ''}
-              </p>
-            </>
-          )}
-        </>
-      )}
-      {livePhase === 'leaderboard' && (
-        <p className="text-2xl font-bold">Leaderboard</p>
-      )}
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────
-// CENTER PANEL
+// STAGE TRIGGERS (no game active)
 // ─────────────────────────────────────────────
-function CenterPanel({
-  livePhase, quiz, isLastQuestion, questionCount, showMedia, mediaPicker, setMediaPicker,
-  handleAction, sendQuizAction, executeSegment, finishSegment, actionError,
+function StageTriggers({
+  leaderboardActive, showMedia, mediaPicker, setMediaPicker,
+  handleAction, executeSegment, finishSegment, socket,
 }: {
-  livePhase: string;
-  quiz: any;
-  isLastQuestion: boolean;
-  questionCount: number;
+  leaderboardActive: boolean;
   showMedia: ShowMedia[];
   mediaPicker: boolean;
   setMediaPicker: (v: boolean) => void;
   handleAction: (key: string, action: () => void, duration?: number) => void;
-  sendQuizAction: (type: string, payload?: Record<string, unknown>) => void;
   executeSegment: (config: Record<string, unknown>) => void;
   finishSegment: () => void;
-  actionError: string | null;
+  socket: any;
 }) {
-  const idleActions = (
-    <div className="space-y-3 max-w-md mx-auto w-full">
-      <Button
-        className="w-full h-14 text-xl font-bold text-white"
-        style={{ backgroundColor: '#e94560' }}
-        onClick={() => handleAction('start-quiz', () =>
-          executeSegment({ type: 'quiz', timePerQuestion: 30, totalQuestions: questionCount }), 3000)}
-      >
-        Start Quiz Round
-      </Button>
-      <Button
-        className="w-full h-11 text-base font-semibold bg-white/10 hover:bg-white/20"
-        onClick={() => handleAction('show-lb', () =>
-          executeSegment({ type: 'leaderboard' }), 2000)}
-      >
-        Show Leaderboard
-      </Button>
-      <Button
-        className="w-full h-11 text-base font-semibold bg-white/10 hover:bg-white/20"
-        onClick={() => setMediaPicker(true)}
-      >
-        Play Media
-      </Button>
+  return (
+    <div className="space-y-3">
+      {/* Row 1 */}
+      <div className="grid grid-cols-4 gap-2">
+        <TriggerButton
+          icon={<Trophy className="w-4 h-4" />}
+          label={leaderboardActive ? '✓ Board' : 'Board'}
+          className={leaderboardActive ? 'ring-2 ring-[#ffb700] bg-[#ffb700]/20' : ''}
+          onClick={() => handleAction('toggle-lb', () => {
+            if (leaderboardActive) {
+              finishSegment();
+            } else {
+              executeSegment({ type: 'leaderboard' });
+            }
+          }, 1000)}
+        />
+        <TriggerButton
+          icon={<Monitor className="w-4 h-4" />}
+          label="Media"
+          onClick={() => setMediaPicker(!mediaPicker)}
+        />
+        <TriggerButton
+          icon={<QrCode className="w-4 h-4" />}
+          label="QR"
+          onClick={() => handleAction('show-qr', () =>
+            socket?.emit('stageOverlaySet', { type: 'qr' }, () => {}), 1000)}
+        />
+      </div>
 
-      {/* Media picker */}
+      {/* Row 2 */}
+      <div className="grid grid-cols-4 gap-2">
+        <TriggerButton
+          icon={<Flame className="w-4 h-4" />}
+          label="Hype"
+          className="bg-gradient-to-br from-orange-500/30 to-red-500/30 hover:from-orange-500/50 hover:to-red-500/50"
+          onClick={() => handleAction('mood-hype', () =>
+            socket?.emit('stageMoodSet', 'hype'))}
+        />
+        <TriggerButton
+          icon={<Snowflake className="w-4 h-4" />}
+          label="Chill"
+          className="bg-gradient-to-br from-blue-500/30 to-cyan-500/30 hover:from-blue-500/50 hover:to-cyan-500/50"
+          onClick={() => handleAction('mood-chill', () =>
+            socket?.emit('stageMoodSet', 'chill'))}
+        />
+        <TriggerButton
+          icon={<VolumeX className="w-4 h-4" />}
+          label="Mute"
+          onClick={() => handleAction('mute', () => {
+            socket?.emit('stageAudioMusic', null);
+          })}
+        />
+        <TriggerButton
+          icon={<ShieldAlert className="w-4 h-4" />}
+          label="SOS"
+          className="bg-red-500/10 hover:bg-red-500/30 text-red-400"
+          onClick={() => handleAction('sos', () => {
+            socket?.emit('showCancel');
+            socket?.emit('stageOverlayClear');
+            socket?.emit('stageMoodSet', 'neutral');
+            socket?.emit('stageAudioMusic', null);
+          }, 3000)}
+        />
+      </div>
+
+      {/* Media picker overlay */}
       {mediaPicker && (
-        <div className="p-3 rounded-lg space-y-2" style={{ backgroundColor: '#1a1a2e' }}>
+        <div className="p-3 rounded-xl space-y-2" style={{ backgroundColor: '#1a1a2e' }}>
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Select media</p>
           {showMedia.length === 0 ? (
             <p className="text-sm text-gray-500">No media clips. Add them in prep mode.</p>
@@ -840,7 +799,7 @@ function CenterPanel({
             showMedia.map(m => (
               <button
                 key={m.id}
-                className="w-full text-left p-2 rounded hover:bg-white/10 transition-colors"
+                className="w-full text-left p-2.5 rounded-lg hover:bg-white/10 transition-colors"
                 onClick={() => handleAction('play-media', () =>
                   executeSegment({ type: 'media', src: m.src, title: m.title, duration: m.duration, autoAdvance: true }), 2000)}
               >
@@ -854,351 +813,479 @@ function CenterPanel({
       )}
     </div>
   );
+}
+
+
+// ─────────────────────────────────────────────
+// QUIZ TRIGGERS (quiz active)
+// ─────────────────────────────────────────────
+function QuizTriggers({
+  quiz, isLastQuestion, handleAction, sendQuizAction, finishSegment,
+}: {
+  quiz: GameState['quiz'];
+  isLastQuestion: boolean;
+  handleAction: (key: string, action: () => void, duration?: number) => void;
+  sendQuizAction: (type: string, payload?: Record<string, unknown>) => void;
+  finishSegment: () => void;
+}) {
+  const phase = quiz.phase;
+
+  return (
+    <div className="grid grid-cols-4 gap-2">
+      {phase === 'IDLE' && (
+        <>
+          <TriggerButton
+            icon={<Play className="w-4 h-4" />}
+            label="Start"
+            accent
+            onClick={() => handleAction('start-quiz', () =>
+              sendQuizAction('START', { timePerQuestion: 30, totalQuestions: quiz.config.totalQuestions }), 2000)}
+          />
+          <TriggerButton
+            icon={<StopCircle className="w-4 h-4" />}
+            label="Cancel"
+            className="text-red-400"
+            onClick={() => handleAction('cancel-quiz', () => {
+              sendQuizAction('CANCEL');
+              finishSegment();
+            }, 2000)}
+          />
+          <div />
+          <div />
+        </>
+      )}
+
+      {phase === 'QUESTION' && (
+        <>
+          <TriggerButton
+            icon={<Eye className="w-4 h-4" />}
+            label="Reveal"
+            accent
+            onClick={() => handleAction('reveal', () => sendQuizAction('REVEAL'))}
+          />
+          <TriggerButton
+            icon={<SkipForward className="w-4 h-4" />}
+            label="Next"
+            onClick={() => handleAction('next', () =>
+              sendQuizAction(isLastQuestion ? 'SKIP_TO_END' : 'NEXT'))}
+          />
+          <TriggerButton
+            icon={<SkipForward className="w-4 h-4" />}
+            label="Skip"
+            onClick={() => handleAction('skip', () => sendQuizAction('NEXT'))}
+          />
+          <TriggerButton
+            icon={<StopCircle className="w-4 h-4" />}
+            label="End Round"
+            className="text-red-400"
+            onClick={() => handleAction('end-round', () => {
+              sendQuizAction('SKIP_TO_END');
+              finishSegment();
+            }, 2000)}
+          />
+        </>
+      )}
+
+      {phase === 'REVEAL' && (
+        <>
+          <TriggerButton
+            icon={<SkipForward className="w-4 h-4" />}
+            label={isLastQuestion ? 'Results' : 'Next Q'}
+            accent
+            onClick={() => handleAction('next', () =>
+              sendQuizAction(isLastQuestion ? 'SKIP_TO_END' : 'NEXT'))}
+          />
+          <TriggerButton
+            icon={<StopCircle className="w-4 h-4" />}
+            label="End Round"
+            onClick={() => handleAction('end-round', () => {
+              sendQuizAction('SKIP_TO_END');
+              finishSegment();
+            }, 2000)}
+          />
+          <div /> {/* spacer */}
+          <div /> {/* spacer */}
+        </>
+      )}
+
+      {phase === 'END' && (
+        <>
+          <TriggerButton
+            icon={<Check className="w-4 h-4" />}
+            label="Finish"
+            accent
+            onClick={() => handleAction('finish', () => finishSegment())}
+          />
+          <div />
+          <div />
+          <div />
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// TRIGGER BUTTON
+// ─────────────────────────────────────────────
+function TriggerButton({
+  icon, label, accent, className, onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  accent?: boolean;
+  className?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`rounded-xl flex flex-col items-center justify-center gap-1 min-h-[48px] py-3 px-2 transition-all active:scale-95 ${
+        accent
+          ? 'bg-[#e94560] hover:bg-[#d63a54] text-white'
+          : className || 'bg-white/10 hover:bg-white/20'
+      }`}
+      onClick={onClick}
+    >
+      {icon}
+      <span className="text-[11px] font-semibold leading-tight">{label}</span>
+    </button>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// QUIZ INFO PANEL (replaces tabs when quiz active)
+// ─────────────────────────────────────────────
+function QuizInfoPanel({
+  quiz, gameState, answeredCount, teamCount, answerDistribution,
+}: {
+  quiz: GameState['quiz'];
+  gameState: GameState;
+  answeredCount: number;
+  teamCount: number;
+  answerDistribution: number[] | null;
+}) {
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {/* QUIZ ACTIVE bar */}
+      <div className="px-3 py-2 flex items-center gap-3" style={{ backgroundColor: 'rgba(233, 69, 96, 0.15)' }}>
+        <span className="text-xs font-black uppercase tracking-widest text-[#e94560]">QUIZ ACTIVE</span>
+        <span className="text-xs text-gray-400">
+          Q{(quiz.currentQuestionIndex ?? 0) + 1}/{quiz.config.totalQuestions}
+        </span>
+      </div>
+
+      <div className="p-3 space-y-4">
+        {/* Timer */}
+        {quiz.phase === 'QUESTION' && (
+          <div className="text-center">
+            <span className={`text-6xl font-black tabular-nums font-mono ${
+              (quiz.timer ?? 99) <= 5 ? 'text-red-400' : (quiz.timer ?? 99) <= 10 ? 'text-yellow-400' : 'text-white'
+            }`}>
+              {quiz.timer}
+            </span>
+          </div>
+        )}
+
+        {quiz.phase === 'REVEAL' && (
+          <div className="text-center">
+            <span className="text-2xl font-bold text-[#00c896]">REVEAL</span>
+          </div>
+        )}
+
+        {quiz.phase === 'END' && (
+          <div className="text-center">
+            <span className="text-2xl font-bold text-[#ffb700]">ROUND COMPLETE</span>
+          </div>
+        )}
+
+        {/* Question text */}
+        {quiz.currentQuestion && (
+          <div className="p-3 rounded-xl" style={{ backgroundColor: '#1a1a2e' }}>
+            <p className="text-sm font-semibold">{quiz.currentQuestion.text}</p>
+            <p className="text-xs text-[#00c896] mt-1">
+              {String.fromCharCode(65 + quiz.currentQuestion.correctOptionIndex)}: {quiz.currentQuestion.options[quiz.currentQuestion.correctOptionIndex]}
+            </p>
+          </div>
+        )}
+
+        {/* Answer distribution */}
+        {quiz.currentQuestion && answerDistribution && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Answer Distribution</p>
+            {quiz.currentQuestion.options.map((opt, i) => {
+              const count = answerDistribution[i];
+              const maxCount = Math.max(...answerDistribution, 1);
+              const percent = (count / maxCount) * 100;
+              const isCorrect = i === quiz.currentQuestion!.correctOptionIndex;
+              const isRevealed = quiz.phase === 'REVEAL';
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-xs font-bold w-4 text-gray-500">{String.fromCharCode(65 + i)}</span>
+                  <div className="flex-1 h-6 rounded-lg overflow-hidden relative" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                    <div
+                      className="h-full rounded-lg transition-all duration-500"
+                      style={{
+                        width: `${Math.max(percent, 4)}%`,
+                        backgroundColor: isRevealed
+                          ? isCorrect ? '#00c896' : 'rgba(255,255,255,0.15)'
+                          : 'rgba(255,255,255,0.2)',
+                      }}
+                    />
+                    <span className="absolute inset-0 flex items-center px-2 text-xs truncate text-gray-300">{opt}</span>
+                  </div>
+                  <span className="text-xs tabular-nums w-4 text-right text-gray-500">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Answered count — team dots */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">
+            Answered: {answeredCount}/{teamCount}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {gameState.teams.map(t => {
+              const answered = quiz.answers[t.id]?.locked;
+              return (
+                <div
+                  key={t.id}
+                  className="w-3 h-3 rounded-full transition-all"
+                  style={{
+                    backgroundColor: answered ? t.color : 'rgba(255,255,255,0.1)',
+                    boxShadow: answered ? `0 0 6px ${t.color}` : 'none',
+                  }}
+                  title={`${t.name}${answered ? ' (answered)' : ''}`}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// TAB: SOUNDS
+// ─────────────────────────────────────────────
+function SoundsTab({
+  socket, handleAction,
+}: {
+  socket: any;
+  handleAction: (key: string, action: () => void, duration?: number) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {SOUND_CUES.map(cue => (
+        <button
+          key={cue.url}
+          className="rounded-xl p-3 flex flex-col items-center gap-1 bg-white/5 hover:bg-white/15 active:scale-95 transition-all"
+          onClick={() => handleAction(`sfx-${cue.label}`, () =>
+            socket?.emit('stageAudioCue', cue.url), 500)}
+        >
+          <span className="text-xl">{cue.emoji}</span>
+          <span className="text-[10px] font-semibold text-gray-400">{cue.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// TAB: TITLES
+// ─────────────────────────────────────────────
+function TitlesTab({
+  socket, handleAction, customTitle, setCustomTitle,
+}: {
+  socket: any;
+  handleAction: (key: string, action: () => void, duration?: number) => void;
+  customTitle: string;
+  setCustomTitle: (v: string) => void;
+}) {
+  const showTitle = (text: string) => {
+    handleAction('title', () =>
+      socket?.emit('stageOverlaySet', { type: 'title', content: text }, () => {}), 500);
+  };
 
   return (
     <div className="space-y-3">
-      {(livePhase === 'idle' || livePhase === 'quiz-end') && idleActions}
+      {/* Custom title input */}
+      <div className="flex gap-2">
+        <Input
+          value={customTitle}
+          onChange={e => setCustomTitle(e.target.value)}
+          placeholder="Custom title..."
+          className="flex-1 bg-white/10 border-white/10 text-white placeholder:text-gray-500 h-10 text-sm"
+          onKeyDown={e => {
+            if (e.key === 'Enter' && customTitle.trim()) {
+              showTitle(customTitle.trim());
+              setCustomTitle('');
+            }
+          }}
+        />
+        <Button
+          className="h-10 bg-white/10 hover:bg-white/20"
+          onClick={() => {
+            if (customTitle.trim()) {
+              showTitle(customTitle.trim());
+              setCustomTitle('');
+            }
+          }}
+        >
+          <Send className="w-4 h-4" />
+        </Button>
+      </div>
 
-      {livePhase === 'quiz-idle' && (
-        <div className="max-w-md mx-auto w-full space-y-3">
-          <Button
-            className="w-full h-14 text-xl font-bold text-white"
-            style={{ backgroundColor: '#e94560' }}
-            onClick={() => handleAction('start-30', () =>
-              sendQuizAction('START', { timePerQuestion: 30, totalQuestions: questionCount }), 3000)}
+      {/* Preset titles */}
+      <div className="space-y-1.5">
+        {TITLE_CARDS.map(title => (
+          <button
+            key={title}
+            className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/15 active:scale-[0.98] transition-all"
+            onClick={() => showTitle(title)}
           >
-            Start — 30s per question
-          </Button>
-          <Button
-            className="w-full h-11 text-base font-semibold bg-white/10 hover:bg-white/20"
-            onClick={() => handleAction('start-15', () =>
-              sendQuizAction('START', { timePerQuestion: 15, totalQuestions: questionCount }), 3000)}
-          >
-            Blitz — 15s per question
-          </Button>
-        </div>
-      )}
+            <p className="text-sm font-semibold">{title}</p>
+          </button>
+        ))}
+      </div>
 
-      {livePhase === 'quiz-question' && (
-        <div className="max-w-md mx-auto w-full space-y-3">
-          {/* Current question preview */}
-          {quiz?.currentQuestion && (
-            <div className="p-3 rounded-lg" style={{ backgroundColor: '#1a1a2e' }}>
-              <p className="text-sm font-semibold">{quiz.currentQuestion.text}</p>
-              <p className="text-xs text-green-400 mt-1">
-                Answer: {quiz.currentQuestion.options[quiz.currentQuestion.correctOptionIndex]}
-              </p>
-            </div>
-          )}
-          <Button
-            className="w-full h-14 text-xl font-bold text-white"
-            style={{ backgroundColor: '#e94560' }}
-            onClick={() => handleAction('reveal', () => sendQuizAction('REVEAL'))}
-          >
-            Reveal Answer
-          </Button>
-          <Button
-            className="w-full h-11 text-base font-semibold bg-white/10 hover:bg-white/20"
-            onClick={() => handleAction('skip', () => sendQuizAction('REVEAL'))}
-          >
-            Skip Question
-          </Button>
-        </div>
-      )}
-
-      {livePhase === 'quiz-reveal' && (
-        <div className="max-w-md mx-auto w-full space-y-3">
-          <Button
-            className="w-full h-14 text-xl font-bold text-white"
-            style={{ backgroundColor: '#e94560' }}
-            onClick={() => handleAction('next', () =>
-              sendQuizAction(isLastQuestion ? 'SKIP_TO_END' : 'NEXT'))}
-          >
-            {isLastQuestion ? 'Show Results' : 'Next Question'}
-          </Button>
-          <Button
-            className="w-full h-11 text-base font-semibold bg-white/10 hover:bg-white/20"
-            onClick={() => handleAction('end-round', () => sendQuizAction('SKIP_TO_END'))}
-          >
-            End Round
-          </Button>
-        </div>
-      )}
-
-      {livePhase === 'media' && (
-        <div className="max-w-md mx-auto w-full">
-          <Button
-            className="w-full h-11 text-base font-semibold bg-white/10 hover:bg-white/20"
-            onClick={() => handleAction('skip-media', () => finishSegment())}
-          >
-            Skip
-          </Button>
-        </div>
-      )}
-
-      {livePhase === 'leaderboard' && (
-        <div className="max-w-md mx-auto w-full">
-          <Button
-            className="w-full h-11 text-base font-semibold bg-white/10 hover:bg-white/20"
-            onClick={() => handleAction('dismiss-lb', () => finishSegment())}
-          >
-            Dismiss
-          </Button>
-        </div>
-      )}
-
-      {actionError && (
-        <p className="text-sm text-red-400 text-center">{actionError}</p>
-      )}
+      {/* Clear overlay */}
+      <button
+        className="w-full text-center p-2 rounded-lg text-xs text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-colors"
+        onClick={() => handleAction('clear-overlay', () =>
+          socket?.emit('stageOverlayClear'), 500)}
+      >
+        Clear Overlay
+      </button>
     </div>
   );
 }
 
+
 // ─────────────────────────────────────────────
-// RIGHT PANEL
+// TAB: GAMES
 // ─────────────────────────────────────────────
-function RightPanel({
-  livePhase, quiz, gameState, answerDistribution, teamResults, questionCount, showMedia,
+function GamesTab({
+  questionCount, handleAction, executeSegment,
 }: {
-  livePhase: string;
-  quiz: any;
-  gameState: any;
-  answerDistribution: number[] | null;
-  teamResults: any[] | null;
   questionCount: number;
-  showMedia: ShowMedia[];
+  handleAction: (key: string, action: () => void, duration?: number) => void;
+  executeSegment: (config: Record<string, unknown>) => void;
 }) {
-  // Idle: content remaining
-  if (livePhase === 'idle' || livePhase === 'quiz-end') {
-    return (
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm text-gray-500">Content remaining</p>
-          <p className="text-base text-gray-200 mt-1">{questionCount} questions available</p>
-          <p className="text-base text-gray-200">{showMedia.length} media clips</p>
-        </div>
-        {gameState?.teams?.length > 0 && (
-          <div>
-            <p className="text-sm text-gray-500 mb-2">Teams</p>
-            {gameState.teams.map((t: any) => (
-              <div key={t.id} className="flex items-center gap-2 py-1">
-                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-                <span className="text-sm flex-1 truncate">{t.name}</span>
-                <span className="text-sm text-gray-500 tabular-nums">{t.score}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Quiz question: answer distribution
-  if (livePhase === 'quiz-question' && answerDistribution && quiz?.currentQuestion) {
-    const teamCount = Math.max(gameState?.teams?.length || 1, 1);
-    return (
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm text-gray-500 mb-2">Answer distribution</p>
-          {quiz.currentQuestion.options.map((_opt: string, i: number) => {
-            const count = answerDistribution[i];
-            const percent = (count / teamCount) * 100;
-            const isCorrect = i === quiz.currentQuestion!.correctOptionIndex;
-            return (
-              <div key={i} className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-bold w-4 text-gray-500">{String.fromCharCode(65 + i)}</span>
-                <div className="flex-1 h-4 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${Math.max(percent, 3)}%`,
-                      backgroundColor: isCorrect ? '#00c896' : 'rgba(255,255,255,0.2)',
-                    }}
-                  />
-                </div>
-                <span className="text-xs tabular-nums w-4 text-right text-gray-500">{count}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div>
-          <p className="text-sm text-gray-500 mb-1">Team status</p>
-          {gameState?.teams?.map((t: any) => {
-            const answered = quiz.answers[t.id]?.locked;
-            return (
-              <div key={t.id} className="flex items-center gap-2 py-0.5">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: answered ? '#00c896' : 'rgba(255,255,255,0.1)' }} />
-                <span className="text-xs truncate">{t.name}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // Quiz reveal: per-team results
-  if (livePhase === 'quiz-reveal' && teamResults) {
-    return (
-      <div className="space-y-2">
-        <p className="text-sm text-gray-500 mb-2">Results</p>
-        {teamResults.map((t: any) => (
-          <div key={t.id} className="flex items-center gap-2 py-1">
-            <span className={`text-sm ${t.correct ? 'text-green-400' : t.answered ? 'text-red-400' : 'text-gray-600'}`}>
-              {t.correct ? '\u2713' : t.answered ? '\u2717' : '\u2014'}
-            </span>
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-            <span className="text-sm flex-1 truncate">{t.name}</span>
-            <span className="text-sm text-gray-500 tabular-nums">{t.score}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // Leaderboard: full standings
-  if (livePhase === 'leaderboard' && gameState?.teams) {
-    const sorted = [...gameState.teams].sort((a: any, b: any) => b.score - a.score);
-    return (
-      <div className="space-y-2">
-        <p className="text-sm text-gray-500 mb-2">Standings</p>
-        {sorted.map((t: any, i: number) => (
-          <div key={t.id} className="flex items-center gap-2 py-1">
-            <span className="text-xs font-bold w-4 text-gray-500">{i + 1}</span>
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-            <span className="text-sm flex-1 truncate">{t.name}</span>
-            <span className="text-sm text-gray-500 tabular-nums">{t.score}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // Media: content inventory
   return (
     <div className="space-y-2">
-      <p className="text-sm text-gray-500">{questionCount} questions, {showMedia.length} media clips</p>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// FX BAR
-// ─────────────────────────────────────────────
-function FxBar({
-  socket, leaderboardActive, handleAction, onEndShow,
-}: {
-  socket: any;
-  leaderboardActive: boolean;
-  handleAction: (key: string, action: () => void, duration?: number) => void;
-  onEndShow: () => void;
-}) {
-  return (
-    <div
-      className="flex-shrink-0 h-16 flex items-center justify-center gap-3 px-4 border-t"
-      style={{ backgroundColor: '#1a1a2e', borderColor: 'rgba(255,255,255,0.05)' }}
-    >
       <button
-        className={`w-12 h-12 rounded-lg flex items-center justify-center text-lg transition-colors ${
-          leaderboardActive ? 'bg-yellow-500/20 ring-1 ring-yellow-500/50' : 'bg-white/10 hover:bg-white/20'
-        }`}
-        onClick={() => handleAction('lb-toggle', () => socket?.emit('toggleLeaderboard', !leaderboardActive))}
-        title="Leaderboard"
+        className="w-full p-4 rounded-xl text-left bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all"
+        onClick={() => handleAction('start-quiz', () =>
+          executeSegment({ type: 'quiz', timePerQuestion: 30, totalQuestions: questionCount }), 3000)}
       >
-        <span role="img" aria-label="leaderboard">&#127942;</span>
-      </button>
-      <button
-        className="w-12 h-12 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-lg"
-        onClick={() => handleAction('confetti', () => socket?.emit('triggerAnimation', 'confetti'), 2000)}
-        title="Confetti"
-      >
-        <span role="img" aria-label="confetti">&#127881;</span>
-      </button>
-      <button
-        className="w-12 h-12 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-lg"
-        onClick={() => handleAction('applause', () => socket?.emit('adminPlayMedia', { type: 'audio', url: '/assets/sounds/applause.mp3', duration: 5 }), 5000)}
-        title="Applause"
-      >
-        <span role="img" aria-label="applause">&#128079;</span>
-      </button>
-      <button
-        className="w-12 h-12 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-lg"
-        onClick={() => handleAction('boo', () => socket?.emit('adminPlayMedia', { type: 'audio', url: '/assets/sounds/boo.mp3', duration: 3 }), 3000)}
-        title="Boo"
-      >
-        <span role="img" aria-label="boo">&#128078;</span>
-      </button>
-      <button
-        className="w-12 h-12 rounded-lg bg-red-500/10 hover:bg-red-500/20 flex items-center justify-center text-lg"
-        onClick={onEndShow}
-        title="End Show"
-      >
-        <span role="img" aria-label="end show">&#9888;&#65039;</span>
-      </button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────
-// POSTSHOW
-// ─────────────────────────────────────────────
-function PostShow({
-  gameState, onEnd,
-}: {
-  gameState: any;
-  onEnd: () => void;
-}) {
-  useEffect(() => {
-    confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-  }, []);
-
-  const sorted = [...(gameState?.teams || [])].sort((a: any, b: any) => b.score - a.score);
-  const medals = ['#FFD700', '#C0C0C0', '#CD7F32'];
-
-  return (
-    <motion.div
-      key="postshow"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex-1 flex flex-col items-center justify-center p-6 space-y-6"
-    >
-      <h1 className="text-3xl font-black">Great show!</h1>
-
-      <div className="w-full max-w-md space-y-3">
-        {sorted.map((t: any, i: number) => (
-          <div
-            key={t.id}
-            className="flex items-center gap-3 p-4 rounded-lg"
-            style={{ backgroundColor: '#1a1a2e' }}
-          >
-            <span
-              className="text-xl font-black w-8 text-center"
-              style={{ color: medals[i] || '#888' }}
-            >
-              {i + 1}
-            </span>
-            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
-            <span className="text-lg font-bold flex-1">{t.name}</span>
-            <span className="text-lg font-bold tabular-nums">{t.score}</span>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-[#e94560]/20 flex items-center justify-center">
+            <span className="text-lg" role="img" aria-label="quiz">&#10068;</span>
           </div>
-        ))}
-      </div>
+          <div>
+            <p className="font-semibold text-sm">Quiz</p>
+            <p className="text-xs text-gray-500">{questionCount} questions available</p>
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
 
-      <div className="text-sm text-gray-500 text-center space-y-1">
-        <p>{sorted.length} teams played</p>
-        {gameState?.quiz?.config?.totalQuestions && (
-          <p>{gameState.quiz.config.totalQuestions} questions</p>
-        )}
-      </div>
 
-      <Button
-        className="h-14 px-8 text-lg font-bold text-white"
-        style={{ backgroundColor: '#e94560' }}
-        onClick={onEnd}
-      >
-        End Show
-      </Button>
-    </motion.div>
+// ─────────────────────────────────────────────
+// TAB: MEDIA
+// ─────────────────────────────────────────────
+function MediaTab({
+  showMedia, socket, handleAction,
+}: {
+  showMedia: ShowMedia[];
+  socket: any;
+  handleAction: (key: string, action: () => void, duration?: number) => void;
+}) {
+  if (showMedia.length === 0) {
+    return (
+      <div className="text-center py-8 text-sm text-gray-500">
+        No media clips. Add them in prep mode.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {showMedia.map(m => (
+        <button
+          key={m.id}
+          className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all"
+          onClick={() => handleAction('display-media', () =>
+            socket?.emit('stageOverlaySet', { type: 'media', content: m.src }, () => {}), 1000)}
+        >
+          <p className="text-sm font-semibold">{m.title}</p>
+          <p className="text-xs text-gray-500 truncate">{m.src}</p>
+          {m.duration && <p className="text-xs text-gray-500">{m.duration}s</p>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────
+// TAB: TEAMS
+// ─────────────────────────────────────────────
+function TeamsTab({
+  gameState, socket, handleAction,
+}: {
+  gameState: GameState | null;
+  socket: any;
+  handleAction: (key: string, action: () => void, duration?: number) => void;
+}) {
+  const teams = gameState?.teams || [];
+  const sorted = [...teams].sort((a, b) => b.score - a.score);
+
+  if (sorted.length === 0) {
+    return (
+      <div className="text-center py-8 text-sm text-gray-500">
+        No teams have joined yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {sorted.map(t => (
+        <div
+          key={t.id}
+          className="flex items-center gap-3 p-3 rounded-xl bg-white/5"
+        >
+          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
+          <span className="text-sm font-semibold flex-1 truncate">{t.name}</span>
+          <span className="text-sm font-bold tabular-nums min-w-[40px] text-right">{t.score}</span>
+          <div className="flex gap-1">
+            <button
+              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center active:scale-90 transition-all"
+              onClick={() => handleAction(`score-${t.id}-down`, () =>
+                socket?.emit('adminUpdateScore', { teamId: t.id, delta: -10 }), 300)}
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+            <button
+              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center active:scale-90 transition-all"
+              onClick={() => handleAction(`score-${t.id}-up`, () =>
+                socket?.emit('adminUpdateScore', { teamId: t.id, delta: 10 }), 300)}
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

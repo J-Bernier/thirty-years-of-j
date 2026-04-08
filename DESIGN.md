@@ -120,9 +120,9 @@ Font: System font stack (no web fonts needed for a one-time event).
 
 All sounds pre-loaded on Display view initialization. Requires user click to satisfy browser autoplay policy (handled by "Start Show" button in lobby).
 
-## Host Dashboard (Tablet)
+## Host Dashboard (Tablet) — Performance Console
 
-Mode-driven command center optimized for tablet use during a live show.
+Trigger grid layout for live performance hosting. Two sections: instant triggers (top) + browsable pages (bottom).
 
 ### Modes
 
@@ -130,35 +130,48 @@ Mode-driven command center optimized for tablet use during a live show.
 |------|-------|------|
 | Picker | Default / after show ends | Select a show |
 | Prep | Select a show | GO LIVE or back to picker |
-| Lobby | After GO LIVE | First segment starts (auto-transition to Live) |
-| Live | First segment starts | Show completes (auto-transition to Postshow) |
-| Postshow | Show completes | End Show (back to Picker) |
+| Live | After GO LIVE | End Show (back to Picker) |
 
 ### Layout (Live Mode)
 
-3-panel at 1024px+: Left 25% (status) | Center 50% (actions) | Right 25% (context). Fixed FX bar at bottom (64px). Below 1024px: collapsed status bar + full-width center actions + FX bar.
+```
+┌─────────────────────────────────────────┐
+│  INSTANT TRIGGERS (top ~35%)            │
+│  2x4 grid, show flow controls           │
+│  Adapts: stage mode vs quiz active      │
+├─────────────────────────────────────────┤
+│  BROWSABLE PAGES (bottom ~65%)          │
+│  Tab bar: Sounds | Titles | Games |     │
+│           Media | Teams                 │
+│  Replaced by Quiz Info when quiz active │
+└─────────────────────────────────────────┘
+```
 
-### Typography Tokens
-
-| Element | Size | Weight | Extra |
-|---------|------|--------|-------|
-| Panel header | 14px | 600 (Semibold) | Uppercase, tracking-wider, text-gray-500 |
-| Primary value (timer) | text-5xl | 900 (Black) | Tabular nums, monospace |
-| Phase label | text-2xl | 700 (Bold) | |
-| Secondary info | text-base | 400 (Normal) | text-gray-200 |
-| Tertiary info | text-sm | 400 (Normal) | text-gray-500 |
-
-### Spacing & Component Tokens
+### Trigger Buttons
 
 | Token | Value |
 |-------|-------|
-| Panel padding | `p-4` |
-| Panel divider | `border-r border-white/5` |
-| Primary button | `h-14`, full width, `bg-[#e94560]` |
-| Secondary button | `h-11`, `bg-white/10` |
-| FX bar height | `h-16` |
-| FX bar background | `bg-[#1a1a2e]`, `border-t border-white/5` |
-| FX button | `w-12 h-12 rounded-lg` |
+| Grid | `grid-cols-4 gap-2` (stage) or `grid-cols-4` (quiz, single row) |
+| Button | `rounded-xl`, min 48px height, `bg-[#1a1a2e]` |
+| Primary action | `bg-[#e94560]` |
+| Mood hype | `linear-gradient(135deg, #e94560, #ff6b35)` |
+| Mood chill | `linear-gradient(135deg, #00a8e8, #0077b6)` |
+| SOS | `bg-red-500/10`, `border border-red-500/30` |
+| Icon | 16px |
+| Label | 11px, font-semibold |
+
+### Stage Triggers (no game)
+
+Row 1: Start Quiz (accent), Leaderboard, Media, QR Code
+Row 2: Hype, Chill, Mute, SOS
+
+### Quiz Triggers (game active)
+
+Single row: Reveal Answer (accent), Next Question, Skip, End Round
+
+### Browsable Pages
+
+Tab bar: `text-xs font-semibold uppercase tracking-wider`. Active tab: `text-[#e94560] border-b-2 border-[#e94560]`.
 
 ### Go Live Transition
 

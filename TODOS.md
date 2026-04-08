@@ -1,10 +1,17 @@
 # TODOS
 
-## Post-Ship Cleanup
+## Stretch Goals
 
-### Remove standalone quiz fallback path
-**What:** Remove the dual-path quiz routing in `server/index.ts` (lines 167-196) that falls back to standalone QuizManager when ShowRunner isn't active.
-**Why:** DRY violation — two code paths for quiz admin actions, player answers, and locks. With the command center, all quiz usage goes through ShowRunner.
-**Context:** Kept during command center implementation as a dev convenience (// LEGACY comment). Once the command center is stable and tested, this dead code should go. Consider adding a "quick start" button in the command center as a replacement for the standalone quiz dev workflow.
-**Depends on:** Command center feature shipped and stable.
-**Added:** 2026-04-07 (eng review)
+### Canvas particle atmosphere
+**What:** Replace CSS gradient atmosphere with canvas-based particle system that responds to team colors, chat activity, and mood shifts.
+**Why:** More dynamic, "living organism" feel. CSS gradients are functional but particles would be theatrical.
+**Context:** Current MVP uses CSS gradient animations for 3 moods (hype/chill/neutral). Canvas upgrade is purely visual polish.
+**Depends on:** Live Performance Console shipped and stable.
+**Added:** 2026-04-08 (eng review)
+
+### Game plugin abstraction
+**What:** Extract a GamePlugin interface from the direct quiz wiring when game #2 is added.
+**Why:** Current quiz is wired directly into the stage. When a second game type materializes, extract the pattern.
+**Context:** Premature to abstract now with only one game. The Round interface on the server already provides extensibility.
+**Depends on:** A second game type being designed.
+**Added:** 2026-04-08 (design doc)

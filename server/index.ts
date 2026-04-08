@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { ClientToServerEvents, ServerToClientEvents, GameState, ServerTeam } from './types';
+import { ClientToServerEvents, ServerToClientEvents, GameState, ServerTeam, DEFAULT_STAGE_STATE } from './types';
 import {
   DISCONNECT_GRACE_PERIOD_MS,
   FIRESTORE_SAVE_DEBOUNCE_MS,
@@ -40,6 +40,7 @@ let gameState: ServerGameState = {
   activeRound: null,
   history: [],
   showLeaderboard: false,
+  stage: { ...DEFAULT_STAGE_STATE },
   quiz: {
     isActive: false,
     config: { timePerQuestion: DEFAULT_TIME_PER_QUESTION, totalQuestions: 0 },
@@ -173,34 +174,58 @@ io.on('connection', (socket) => {
   });
 
   socket.on('quizAdminAction', (action) => {
-    if (showRunner.isActive()) {
-      showRunner.handleAction(action);
-    } else {
-      // LEGACY: standalone quiz flow (dev convenience, remove post-ship)
-      quizManager.handleAdminAction(action);
-    }
+    showRunner.handleAction(action);
   });
 
   socket.on('quizAnswer', (optionIndex) => {
     const team = gameState.teams.find(t => t.socketId === socket.id);
     if (team) {
-      if (showRunner.isActive()) {
-        showRunner.handlePlayerAnswer(team.id, optionIndex);
-      } else {
-        quizManager.handleAnswer(team.id, optionIndex);
-      }
+      showRunner.handlePlayerAnswer(team.id, optionIndex);
     }
   });
 
   socket.on('quizLock', () => {
     const team = gameState.teams.find(t => t.socketId === socket.id);
     if (team) {
-      if (showRunner.isActive()) {
-        showRunner.handlePlayerLock(team.id);
-      } else {
-        quizManager.handleLock(team.id);
-      }
+      showRunner.handlePlayerLock(team.id);
     }
+  });
+
+  // Stage controls
+  socket.on('stageMoodSet', (mood) => {
+    gameState.stage.mood = mood;
+    broadcastGameState();
+  });
+
+  socket.on('stageOverlaySet', (overlay, callback) => {
+    if (showRunner.isActive()) {
+      callback({ success: false, error: 'End the game first' });
+      return;
+    }
+    gameState.stage.overlay = overlay;
+    broadcastGameState();
+    callback({ success: true });
+  });
+
+  socket.on('stageOverlayClear', () => {
+    if (!showRunner.isActive()) {
+      gameState.stage.overlay = { type: null };
+      broadcastGameState();
+    }
+  });
+
+  socket.on('stageAudioCue', (url) => {
+    gameState.stage.audio.cue = url;
+    broadcastGameState();
+    // Auto-clear cue after broadcast (it's a one-shot trigger)
+    setTimeout(() => {
+      gameState.stage.audio.cue = null;
+    }, 100);
+  });
+
+  socket.on('stageAudioMusic', (url) => {
+    gameState.stage.audio.music = url;
+    broadcastGameState();
   });
 
   socket.on('playerReaction', (reactionType) => {
@@ -274,11 +299,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('showExecuteSegment', async (config) => {
+    gameState.stage.overlay = { type: 'game' };
     await showRunner.executeSegment(config);
   });
 
   socket.on('showFinishSegment', () => {
     showRunner.finishCurrentSegment();
+    gameState.stage.overlay = { type: null };
+    broadcastGameState();
   });
 
   socket.on('showEndShow', () => {
@@ -289,6 +317,7 @@ io.on('connection', (socket) => {
     gameState.quiz.phase = 'IDLE';
     gameState.show = undefined;
     gameState.showLeaderboard = false;
+    gameState.stage = { ...DEFAULT_STAGE_STATE };
     saveGameState(gameState);
     broadcastGameState();
   });
